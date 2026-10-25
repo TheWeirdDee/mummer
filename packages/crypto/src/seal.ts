@@ -69,7 +69,7 @@ export function openPayload<T>(sealedB64: string, publicKey: Uint8Array, secretK
   const plain = openBytes(sealed, publicKey, secretKey);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain));
+    parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(plain));
   } catch {
     throw new CryptoError('malformed_payload');
   }
