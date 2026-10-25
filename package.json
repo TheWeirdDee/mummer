@@ -5,8 +5,14 @@
   "description": "Private, noncustodial Secret Santa paid in shielded ZEC.",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22" },
-  "workspaces": ["apps/*", "workers/*", "packages/*"],
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "workers/*",
+    "packages/*"
+  ],
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
@@ -18,6 +24,7 @@
     "audit:deps": "npm audit --omit=dev"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "typescript": "5.9.3",
     "vitest": "^5.0.5"
   }
