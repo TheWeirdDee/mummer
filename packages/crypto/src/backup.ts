@@ -88,7 +88,7 @@ export function openBackup(backup: string, passphrase: string): BackupContents {
       throw new CryptoError('decrypt_failed');
     }
     try {
-      return backupContents.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain)));
+      return backupContents.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(plain)));
     } catch {
       throw new CryptoError('bad_backup');
     }
