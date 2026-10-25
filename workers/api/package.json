@@ -1,0 +1,17 @@
+{
+  "name": "@mummer/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8787",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate:local": "wrangler d1 migrations apply mummer --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261025.1",
+    "miniflare": "4.20260730.0",
+    "wrangler": "^4.152.0"
+  }
+}
