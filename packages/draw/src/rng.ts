@@ -35,7 +35,7 @@ export function cryptoRandom(): RandomSource {
   let i = buf.length;
   const next32: Uint32Source = () => {
     if (i >= buf.length) {
-      globalThis.crypto.getRandomValues(buf);
+      (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(buf);
       i = 0;
     }
     return buf[i++]!;
