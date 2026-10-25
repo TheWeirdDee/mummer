@@ -1,0 +1,24 @@
+{
+  "name": "mummer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, noncustodial Secret Santa paid in shielded ZEC.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "workspaces": ["apps/*", "workers/*", "packages/*"],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:unit": "vitest run --project packages",
+    "build": "npm run build -w @mummer/web",
+    "dev:api": "npm run dev -w @mummer/api",
+    "dev:web": "npm run dev -w @mummer/web",
+    "test:e2e": "playwright test",
+    "audit:deps": "npm audit --omit=dev"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
