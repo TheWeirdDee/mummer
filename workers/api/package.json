@@ -12,6 +12,16 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261025.1",
     "miniflare": "4.20260730.0",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.152.0",
+    "@mummer/draw": "*",
+    "@mummer/zcash": "*"
+  },
+  "dependencies": {
+    "@mummer/crypto": "*",
+    "@mummer/shared": "*",
+    "@noble/hashes": "^2.4.0",
+    "@scure/base": "^2.4.0",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
   }
 }
