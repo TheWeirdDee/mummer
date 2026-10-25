@@ -1,0 +1,33 @@
+#:schema node_modules/wrangler/config-schema.json
+# Mummer: one Worker serves the static web app (assets) and the JSON API under /api.
+# See docs/DEPLOYMENT.md before deploying. Nothing here is a secret; secrets are set with `wrangler secret put`.
+
+name = "mummer"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "../../apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Run the Worker first so every response (including static files) carries the security headers.
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mummer"
+# Local development uses a throwaway local database and ignores this value.
+# For deployment, run `wrangler d1 create mummer` and replace this with the returned id.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+# Daily retention purge (UTC).
+crons = ["17 3 * * *"]
+
+[vars]
+# Production by default: human check enforced, no relaxations. Local dev overrides this in .dev.vars.
+ENVIRONMENT = "production"
+# Public Turnstile site key (not secret). Set when the Turnstile widget is created.
+TURNSTILE_SITE_KEY = ""
+BUILD_COMMIT = "unknown"
