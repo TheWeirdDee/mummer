@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+*.log
+playwright-report/
+test-results/
+.DS_Store
+coverage/
+tests/e2e/.artifacts/
+internal/
+
+# Source PRDs are kept locally by the owner (v0.1 contains personal notes)
+Mummer PRD v0.1.md
+Mummer_PRD_v1.0_Revised.md
