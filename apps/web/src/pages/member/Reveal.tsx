@@ -124,7 +124,7 @@ export function Reveal({
                   <>
                     {' '}
                     <Button size="small" onClick={() => confirm(r.giverId)}>
-                      Yes, that’s right
+                      Yes, they gave to me
                     </Button>
                   </>
                 )}
@@ -133,7 +133,7 @@ export function Reveal({
           </ul>
         )}
         <p className="muted" style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)' }}>
-          A reveal is the giver&rsquo;s own statement, backed by the memo reference. It is only shown as agreed by both people once the recipient confirms it.
+          A reveal is the giver&rsquo;s own statement, checked against the memo reference. It is only shown as agreed by both people once the recipient confirms it.
         </p>
       </section>
 
