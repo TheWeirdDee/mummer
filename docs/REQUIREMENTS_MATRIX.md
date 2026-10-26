@@ -150,3 +150,17 @@ Test files: `U-Z` = `packages/zcash/test`, `U-C` = `packages/crypto/test`, `U-D`
 | Calendar file, passphrase backup | Backup **Tested**; calendar **Not built** |
 | Stats counts only | **Tested** |
 | Name collision fallback "Guiser" | Not researched |
+
+## Additions made after the first matrix (hardening round)
+
+| Capability | Status | Evidence |
+|---|---|---|
+| Host can change join and reveal dates before the draw | **Tested** | A-extend (`extend.test.ts`), `AdminPage.tsx` |
+| Address commitments checked by the host and the giver | **Tested** | A-hardening, `DrawPanel.tsx`, `Payment.tsx` (the browser-side comparisons have no dedicated unit test) |
+| Host-key fingerprint in the invite; mismatch blocks joining | **Tested** | E-validation |
+| Draw pinned to the members version | **Tested** | A-join-draw, A-hardening |
+| Credential conflict screen; link replacement saved before the request | **Tested** (conflict) / **Implemented** (replacement recovery, no automated test) | E-recovery |
+| Totals-only host glass box | **Tested** | A-groups, SEC |
+| Invisible and bidi characters rejected | **Tested** | U-S, U-Z |
+| IPv6 /64 rate-limit buckets; production salt required | **Tested** | A-hardening |
+| X25519 public key validation | **Tested** | A-hardening |
