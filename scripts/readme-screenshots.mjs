@@ -15,7 +15,7 @@ const jobs = [
   ['390x844/home.png', 'landing-phone.png', { left: 0, top: 0, width: 390, height: 844 }],
   ['1280x800/admin-1-waiting.png', 'host-dashboard.png', { left: 0, top: 0, width: 1280, height: 1100 }],
   ['1280x800/join-3-address-error.png', 'address-check.png', { left: 0, top: 0, width: 1280, height: 800 }],
-  ['390x844/member-1-assignment-payment.png', 'payment-phone.png', { left: 0, top: 1080, width: 390, height: 1500 }],
+  ['390x844/member-1-assignment-payment.png', 'payment-phone.png', { left: 0, top: 1280, width: 390, height: 1500 }],
   ['1280x800/privacy.png', 'privacy.png', { left: 0, top: 0, width: 1280, height: 1000 }],
 ];
 for (const [input, output, region] of jobs) {
