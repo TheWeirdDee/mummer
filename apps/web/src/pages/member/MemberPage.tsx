@@ -158,13 +158,27 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
 
       {drawn && me.status === 'assigned' && (
         <>
-          <div className="tabs" role="tablist" aria-label="Your exchange" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
+          <div
+            className="tabs"
+            role="tablist"
+            aria-label="Your exchange"
+            onKeyDown={(e) => {
+              // WAI-ARIA tabs pattern: arrow keys move between tabs, Home/End jump to the ends.
+              const order = ['gift', 'receive', 'account'] as const;
+              const i = order.indexOf(tab);
+              const next = e.key === 'ArrowRight' ? order[(i + 1) % 3] : e.key === 'ArrowLeft' ? order[(i + 2) % 3] : e.key === 'Home' ? order[0] : e.key === 'End' ? order[2] : undefined;
+              if (!next) return;
+              e.preventDefault();
+              setTab(next);
+              document.getElementById(`tab-${next}`)?.focus();
+            }}
+          >
             {([
               ['gift', 'Your gift to give'],
               ['receive', 'A gift for you'],
               ['account', 'My link'],
             ] as const).map(([k, label]) => (
-              <button key={k} id={`tab-${k}`} role="tab" type="button" className="chip" aria-selected={tab === k} aria-pressed={tab === k} aria-controls={`panel-${k}`} onClick={() => setTab(k)}>
+              <button key={k} id={`tab-${k}`} role="tab" type="button" className="chip" aria-selected={tab === k} tabIndex={tab === k ? 0 : -1} aria-controls={`panel-${k}`} onClick={() => setTab(k)}>
                 {label}
               </button>
             ))}
