@@ -6,6 +6,7 @@ export type CredentialState =
   | { status: 'loading' }
   | { status: 'missing' }
   | { status: 'badlink' }
+  | { status: 'conflict'; incoming: StoredCredentials; stored: StoredCredentials }
   | { status: 'ready'; creds: StoredCredentials; publicKey: string; fromLink: boolean; persisted: boolean };
 
 /**
@@ -14,7 +15,7 @@ export type CredentialState =
  * saved earlier. The secret key never leaves the browser; the token is sent only
  * in an Authorization header.
  */
-export function useCredentials(role: 'admin' | 'member', groupId: string, memberId?: string): { state: CredentialState; reload: () => void } {
+export function useCredentials(role: 'admin' | 'member', groupId: string, memberId?: string): { state: CredentialState; reload: () => void; resolveConflict: (useLink: boolean) => void } {
   const [state, setState] = useState<CredentialState>({ status: 'loading' });
   const [nonce, setNonce] = useState(0);
 
@@ -41,6 +42,12 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
           return;
         }
         creds = { v: 1, role, groupId, ...(memberId ? { memberId } : {}), secretKey: crypto.encodeKey(parsed.secretKey), token: parsed.token };
+        // A link that differs from what this device already saved must not silently overwrite it: ask first.
+        const existing = loadCredentials(role, groupId);
+        if (existing && (existing.secretKey !== creds.secretKey || existing.token !== creds.token)) {
+          if (!cancelled) setState({ status: 'conflict', incoming: creds, stored: existing });
+          return;
+        }
         fromLink = true;
         persisted = saveCredentials(creds);
         if (persisted) stripFragment();
@@ -68,5 +75,12 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
     };
   }, [role, groupId, memberId, nonce]);
 
-  return { state, reload: () => setNonce((n) => n + 1) };
+  const resolveConflict = (useLink: boolean) => {
+    if (state.status !== 'conflict') return;
+    if (useLink) saveCredentials(state.incoming);
+    stripFragment();
+    setNonce((n) => n + 1);
+  };
+
+  return { state, reload: () => setNonce((n) => n + 1), resolveConflict };
 }
