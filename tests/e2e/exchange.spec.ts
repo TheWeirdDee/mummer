@@ -85,7 +85,7 @@ test('a full exchange with a host and five participants, in isolated browser pro
     await expect(page.getByRole('dialog')).toContainText('your own word');
     await page.getByRole('button', { name: 'Yes, I received it' }).click();
     await expect(page.getByText('You confirmed this gift')).toBeVisible();
-    await expect(page.getByText('The reference you entered matched.')).toBeVisible();
+    await expect(page.getByText('Mummer recognises the reference you entered.')).toBeVisible();
   }
 
   // 7. Progress is counts only.
@@ -107,7 +107,7 @@ test('a full exchange with a host and five participants, in isolated browser pro
   const recipient = people[NAMES.indexOf(recipientOf.get('Ada')!)]!.page;
   await recipient.goto(links[NAMES.indexOf(recipientOf.get('Ada')!)]!);
   await expect(recipient.getByText(/Ada says they gave to/)).toBeVisible();
-  await recipient.getByRole('button', { name: /Yes, that.s right/ }).click();
+  await recipient.getByRole('button', { name: 'Yes, they gave to me' }).click();
   await expect(recipient.getByText(/confirmed\./)).toBeVisible();
   // A bystander does not see a private reveal.
   const bystanderIdx = NAMES.findIndex((n) => n !== 'Ada' && n !== recipientOf.get('Ada'));
