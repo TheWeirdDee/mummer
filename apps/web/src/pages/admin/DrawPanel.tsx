@@ -36,6 +36,7 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
   const [note, setNote] = useState('');
   const [confirmEarly, setConfirmEarly] = useState(false);
   const [removing, setRemoving] = useState<Candidate>();
+  const [membersVersion, setMembersVersion] = useState(0);
 
   const earlyClose = g.state === 'open';
   const valid = useMemo(() => candidates.filter((c) => c.profile && !c.problem), [candidates]);
@@ -49,11 +50,22 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
       const hostSecret = c.decodeKey(creds.secretKey);
       const hostPublic = c.publicKeyFromSecret(hostSecret);
       const res = await api.profiles(gid, creds.token);
+      setMembersVersion(res.membersVersion);
       const out: Candidate[] = res.members.map((m) => {
         try {
           const profile = c.openProfile(m.sealedProfile, hostPublic, hostSecret, { groupId: gid, pseudonym: m.pseudonym });
           const check = validateGiftAddress(profile.address);
           if (!check.ok) return { id: m.memberId, pseudonym: m.pseudonym, publicKey: m.publicKey, problem: `Their address can’t be used: ${check.message}` };
+          // The address in the sealed profile must be the one the member registered (their browser published its fingerprint).
+          if (m.addressCommitment && c.addressCommitment(gid, m.pseudonym, check.address) !== m.addressCommitment) {
+            return { id: m.memberId, pseudonym: m.pseudonym, publicKey: m.publicKey, problem: 'Their details don’t match what they registered. Ask them to rejoin.' };
+          }
+          // A member whose public key can't be used would make sealing fail for the whole draw: find them now.
+          try {
+            c.sealPayload({ probe: 1 }, m.publicKey);
+          } catch {
+            return { id: m.memberId, pseudonym: m.pseudonym, publicKey: m.publicKey, problem: 'Their key can’t be used. Ask them to rejoin.' };
+          }
           return { id: m.memberId, pseudonym: m.pseudonym, publicKey: m.publicKey, profile: { ...profile, address: check.address } };
         } catch {
           return { id: m.memberId, pseudonym: m.pseudonym, publicKey: m.publicKey, problem: 'Their details couldn’t be opened. Ask them to rejoin.' };
@@ -108,7 +120,7 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
         key = c.generateToken().slice(0, 32);
         saveDraft(keyName, key);
       }
-      const res = await api.draw(gid, creds.token, key, { drawVersion: version, ...(earlyClose ? { closeEarly: true } : {}), ...payload });
+      const res = await api.draw(gid, creds.token, key, { drawVersion: version, membersVersion, ...(earlyClose ? { closeEarly: true } : {}), ...payload });
       clearDraft(keyName);
       setPhase('done');
       setNote(res.replay ? 'This draw had already been saved. Everything is in place.' : '');
@@ -155,6 +167,11 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
 
       {phase === 'idle' && (
         <>
+          {g.hostPlays && (
+            <Notice tone="info" title="You said you&rsquo;re playing too">
+              <p>Make sure you&rsquo;ve joined with the invite link before you draw. Otherwise you won&rsquo;t be in the draw.</p>
+            </Notice>
+          )}
           <p>
             Ready when you are. First we&rsquo;ll open everyone&rsquo;s details <strong>in this browser</strong> to check them, then you can add exclusions and draw.
           </p>
@@ -175,8 +192,9 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
             {candidates.map((c) => (
               <li key={c.id} data-problem={!!c.problem}>
                 <span className="name">
-                  {c.problem ? '⚠ ' : '✓ '}
+                  <span aria-hidden="true">{c.problem ? '⚠ ' : '✓ '}</span>
                   {c.pseudonym}
+                  <span className="sr-only">{c.problem ? ' (needs attention)' : ' (ready)'}</span>
                 </span>
                 <Button size="small" onClick={() => setRemoving(c)} aria-label={`Remove ${c.pseudonym}`}>
                   Remove
