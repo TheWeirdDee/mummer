@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Logo } from './Mask';
 import { Badge, LinkButton } from './ui';
@@ -7,9 +7,15 @@ import { Badge, LinkButton } from './ui';
 
 function ScrollAndAnnounce() {
   const { pathname } = useLocation();
+  const first = useRef(true);
   useEffect(() => {
     window.scrollTo(0, 0);
-    // Keyboard and screen-reader users land at the new page's heading.
+    // On the first load, leave focus at the top of the document so the skip link is the first Tab stop.
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    // After in-app navigation, keyboard and screen-reader users land at the new page's heading.
     const h = document.querySelector<HTMLElement>('main h1');
     if (h) {
       h.setAttribute('tabindex', '-1');
