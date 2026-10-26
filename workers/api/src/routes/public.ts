@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { generateToken } from '@mummer/crypto';
+import { generateToken } from '@mummer/crypto/light';
 import { humanVerifyBody } from '@mummer/shared';
 import { HttpError, type AppBindings } from '../env.js';
 import { json, readBody } from '../http.js';
