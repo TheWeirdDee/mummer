@@ -5,7 +5,7 @@ import { LinkSaver } from '../../components/LinkSaver';
 import { Button, Dialog, Notice } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { loadCrypto } from '../../lib/cryptoClient';
-import { clearLinkSaved, forgetCredentials, saveCredentials, type StoredCredentials } from '../../lib/session';
+import { clearLinkSaved, clearRotation, forgetCredentials, saveCredentials, saveRotation, type StoredCredentials } from '../../lib/session';
 
 /** Link safety and recovery: back up, replace a possibly leaked link, leave, or forget this device. */
 export function Account({
@@ -46,8 +46,11 @@ export function Account({
         newPublicKey: c.encodeKey(kp.publicKey),
         ...(bundle ? { newSealedBundle: c.resealAssignment(bundle, c.encodeKey(kp.publicKey)) } : {}),
       };
-      await api.rotate(gid, mid, creds.token, body);
       const next: StoredCredentials = { v: 1, role: 'member', groupId: gid, memberId: mid, secretKey: c.encodeKey(kp.secretKey), token };
+      // Keep the replacement on this device BEFORE asking the server: if the answer is lost we can still recover it.
+      saveRotation(gid, next);
+      await api.rotate(gid, mid, creds.token, body);
+      clearRotation(gid);
       // The old link is already dead server-side. Keep the new credentials on this device, require the new link to be
       // saved again, and let the page (which survives the credential change) show the save-your-link step.
       saveCredentials(next);
@@ -55,7 +58,11 @@ export function Account({
       setDialog(undefined);
       onReplaced();
     } catch (e) {
-      setError((e as ApiError).message);
+      const ae = e as ApiError;
+      // A definite refusal means nothing changed. A lost connection is ambiguous: keep the pending replacement; the page
+      // will adopt it automatically if the old link turns out to have stopped working.
+      if (ae.code !== 'network') clearRotation(gid);
+      setError(ae.code === 'network' ? 'We lost the connection while replacing your link, so we can’t tell whether it worked. Reload this page: if your old link has stopped working, your new one is saved on this device and will be used automatically.' : ae.message);
       setDialog(undefined);
     }
     setBusy(false);
@@ -148,7 +155,7 @@ export function Account({
                 navigate('/', { replace: true });
               }}
             >
-              Forget it
+              Remove my key from this device
             </Button>
           </>
         }
