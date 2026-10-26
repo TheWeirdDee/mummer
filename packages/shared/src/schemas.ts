@@ -11,6 +11,8 @@ function hasControlCharacter(s: string): boolean {
   for (const ch of s) {
     const c = ch.codePointAt(0)!;
     if (c < 0x20 || c === 0x7f || (c >= 0x80 && c <= 0x9f) || c === 0x2028 || c === 0x2029) return true;
+    // Zero-width and bidirectional-override characters can make one name look like another (or reorder text): refuse them.
+    if ((c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2060 && c <= 0x2064) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff) return true;
   }
   return false;
 }
@@ -93,6 +95,8 @@ export const joinBody = z
     publicKey: key32,
     tokenHash: hex64,
     sealedProfile: b64url(40, LIMITS.sealedProfileMaxChars),
+    /** SHA-256 fingerprint of the registered address; givers check their assignment against it (see addressCommitment). */
+    addressCommitment: hex64,
     humanTicket,
   })
   .strict();
@@ -101,6 +105,8 @@ export type JoinBody = z.infer<typeof joinBody>;
 export const drawBody = z
   .object({
     drawVersion: z.number().int().min(1).max(1000),
+    /** The member-list version the host's browser read with the profiles; the draw is refused if it has moved. */
+    membersVersion: z.number().int().min(0).max(1_000_000),
     closeEarly: z.boolean().optional(),
     bundles: z
       .array(z.object({ memberId: id32, sealedBundle: b64url(40, LIMITS.sealedBundleMaxChars) }).strict())
@@ -149,6 +155,10 @@ export type RotateBody = z.infer<typeof rotateBody>;
 export const TRANSITION_ACTIONS = ['lock', 'reopen', 'reset_draw', 'flag_resolution', 'clear_resolution', 'close'] as const;
 export const transitionBody = z.object({ action: z.enum(TRANSITION_ACTIONS) }).strict();
 export type TransitionBody = z.infer<typeof transitionBody>;
+
+/** Host changes the dates before the draw (for example to give a small group more time). */
+export const extendBody = z.object({ joinDeadline: isoDate, revealDate: isoDate }).strict();
+export type ExtendBody = z.infer<typeof extendBody>;
 
 export const humanVerifyBody = z.object({ token: z.string().min(1).max(4096) }).strict();
 
@@ -213,6 +223,8 @@ export interface RosterEntry {
   id: string;
   pseudonym: string;
   status: string;
+  /** Fingerprint of the address this member registered (see addressCommitment). Empty for members who joined before it existed. */
+  addressCommitment: string;
 }
 
 /** Aggregate-only progress: never per-member, so counts cannot reveal who gave to whom. */
