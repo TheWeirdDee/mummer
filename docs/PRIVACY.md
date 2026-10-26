@@ -27,6 +27,8 @@ Mummer helps keep gift payments shielded on Zcash, while limiting what the organ
 | Group name, budget, dates, timezone, member cap | `groups` | Clear (group-visible by design) | 30 days after reveal date, or until deleted |
 | Host public key; hashed admin token | `groups` | Public key; SHA-256 | Same |
 | Nickname | `members` | Clear (group-visible) | Same |
+| Address commitment | `members.address_commitment` | One-way hash of group, nickname and address; lets host and giver detect a swapped profile. It cannot reveal an address nobody has guessed, but could confirm a guessed one | Same |
+| Members version | `groups.members_version` | Integer counter | Same |
 | Member public key; hashed token | `members` | Public key; SHA-256 | Same |
 | Wishlist and address | `members.sealed_profile` | Sealed to the host's key | Same |
 | Assignment (recipient, wishlist, address, reference, budget) | `assignments` | Sealed to the giver's key | Same |
@@ -40,7 +42,7 @@ Mummer helps keep gift payments shielded on Zcash, while limiting what the organ
 
 **Not stored anywhere:** IP addresses in the database, request bodies in logs, analytics, cookies, advertising or session-replay identifiers. No third-party scripts load on any page except the sandboxed human-check frame on create/join.
 
-**On the user's device:** the person's key and token in local storage (so they can return), non-secret form drafts in session storage, and, if they choose, their local reveal-day guess. "Forget this device" removes the credentials.
+**On the user's device:** the person's key and token in local storage (so they can return), non-secret form drafts in session storage (the address is deliberately **not** kept in a draft), a pending link replacement while one is in flight, and, if they choose, their local reveal-day guess. "Forget this device" removes all of these.
 
 ## Metadata controls
 
