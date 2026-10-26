@@ -25,6 +25,7 @@ Each row: what they can reach, attacks considered, boundaries that hold, mitigat
 - **Attacks:** read the database; correlate sealed bundles with acknowledgments; infer pairings from row order or timestamps; learn addresses.
 - **Boundary:** no plaintext address, wishlist, memo, secret key, or pairing is ever received or stored.
 - **Mitigations:** client-side sealing; assignments keyed by giver and commitments keyed by recipient with no linking column; `WITHOUT ROWID` tables and id-sorted submission so storage order carries no cycle information; day-bucketed timestamps; group-level audit events only; progress is aggregate-only so counts cannot be differenced to a person; bundle fetches are never logged.
+- **Key substitution:** the invite carries a fingerprint of the host's public key (`#hk=`), which the joiner's browser compares with what the server returns; a mismatch blocks joining. Each join also stores an **address commitment** (hash over group, nickname and address) that the host and the giver re-check, so a database writer who swaps a sealed profile or roster entry is detected. Neither helps against an operator who serves altered JavaScript, and an invite without the fingerprint only produces a notice.
 - **Remaining:** IP address and request timing at the network edge; a **malicious** operator can serve altered JavaScript and capture secrets or substitute addresses (anonymous sealing allows forging a profile for the host key). A "bundle fetched then acknowledged soon after" correlation is possible for an operator who logs timing; Mummer does not log bundle fetches, but cannot prove the platform does not.
 - **Tests:** `tests/security/privacy-and-abuse.test.ts`: whole-exchange request/response/database scans for addresses, wishlists, references, tokens and keys; only the consented `reveals` table links two members; timestamps are day buckets; audit events are group-level.
 
@@ -53,6 +54,8 @@ Each row: what they can reach, attacks considered, boundaries that hold, mitigat
 - **Tests:** authorization matrix across endpoints × roles; cross-member and cross-group denial; "no per-member state leaks" (`payments-reveal.test.ts`, `privacy-and-abuse.test.ts`).
 
 ### 6. Malicious member
+
+_Redraw-gate griefing:_ because the draw is pinned to a members version, a member who joins and leaves repeatedly can force the host to retry. Bounded by rate limits, not prevented.
 
 - **Attacks:** forge acknowledgments for others; guess references; replay actions; submit hostile or malformed sealed data; abuse reveals to name someone else; spam joining; SQL/HTML injection; oversize input.
 - **Mitigations:** acknowledgments only by the recipient's own token; reference guesses limited to 10/hour with a 2^80 space; draw-version checks and idempotent, compare-and-swap state changes; schemas reject unknown fields; request bodies capped at 96 KiB while streaming; reveals require the memo reference *and* are rate-limited; reveal errors do not distinguish "unknown person" from "wrong reference"; parameterized SQL only; user text is rendered as text by React; names limited to 32 code points with control characters rejected; rate limits and a human check on creation and joining.
