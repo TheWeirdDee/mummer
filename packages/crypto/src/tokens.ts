@@ -1,7 +1,7 @@
 import { base16, base64urlnopad } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { CRYPTO_SIZES } from '@mummer/shared';
-import { randomBytes } from './sodium.js';
+import { randomBytes } from './random.js';
 
 const enc = new TextEncoder();
 
@@ -35,13 +35,30 @@ export function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
+ * Fingerprint of a member's registered receiving address, stored in the clear next to the member and checked by
+ * the GIVER against the address inside their sealed assignment. Because the host authors assignments, this stops a
+ * malicious host from silently swapping in a different address: the host cannot change what the server holds for
+ * the member. (An operator who controls the server could change both: see docs/THREAT_MODEL.md.)
+ * A fresh shielded address contains ~255 bits of key material, so the hash is not guessable; it can only confirm a
+ * candidate address someone already has. Bound to the group and nickname so it cannot be replayed elsewhere.
+ */
+export function addressCommitment(groupId: string, pseudonym: string, address: string): string {
+  return lengthPrefixedHash(['mummer/address-commitment/v1', groupId, pseudonym.normalize('NFC'), address]);
+}
+
+/**
  * Commitment to a gift reference, filed under the RECIPIENT's id. With an
  * 80-bit random reference an offline attacker holding a database dump cannot
  * recover it, so a plain domain-separated SHA-256 suffices (no server secret).
  * Length-prefixed fields make the encoding unambiguous.
  */
 export function ackCommitment(groupId: string, recipientId: string, canonicalReference: string): string {
-  const fields = ['mummer/ack-commitment/v1', groupId, recipientId, canonicalReference].map((f) => enc.encode(f));
+  return lengthPrefixedHash(['mummer/ack-commitment/v1', groupId, recipientId, canonicalReference]);
+}
+
+/** SHA-256 over 16-bit-length-prefixed UTF-8 fields: an unambiguous encoding. */
+function lengthPrefixedHash(parts: string[]): string {
+  const fields = parts.map((f) => enc.encode(f));
   const total = fields.reduce((n, f) => n + 2 + f.length, 0);
   const buf = new Uint8Array(total);
   let o = 0;
