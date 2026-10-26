@@ -99,7 +99,7 @@ test.describe('join wizard validation', () => {
       ['hello world', /Remove spaces or line breaks/],
       ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F', /does not look like a Zcash/],
       [good.slice(0, -3) + (good.endsWith('qqq') ? 'ppp' : 'qqq'), /typo/],
-      [good.slice(0, 60), /typo|truncated|too short|invalid/i],
+      [good.slice(0, 60), /typo|damaged/i],
       [good.slice(0, 20) + good.slice(20).toUpperCase(), /typo/],
     ];
     for (const [value, message] of cases) {
@@ -170,6 +170,27 @@ test.describe('invitation states', () => {
     await p.ctx.close();
   });
 
+  test('the invite carries the host key fingerprint: a matching one is silent, a missing one is flagged, a wrong one blocks joining', async ({ browser }) => {
+    const ex = await makeExchange({ members: 2, title: 'Key check' });
+    const hk = ex.hostPublicKey;
+    const p = await newPerson(browser);
+    // Matching fingerprint: no warning, joining is allowed.
+    await p.page.goto(`${ex.invite}#hk=${hk}`);
+    await expect(p.page.getByRole('button', { name: 'Join this exchange' })).toBeEnabled();
+    await expect(p.page.getByText(/doesn.t match the host.s key/)).toHaveCount(0);
+    await expect(p.page.getByText('This link has no host key to check')).toHaveCount(0);
+    // No fingerprint: allowed, but said plainly.
+    await p.page.goto(ex.invite);
+    await expect(p.page.getByText('This link has no host key to check')).toBeVisible();
+    await expect(p.page.getByRole('button', { name: 'Join this exchange' })).toBeEnabled();
+    // A different key: refused.
+    const wrong = hk.replace(/^./, hk[0] === 'A' ? 'B' : 'A');
+    await p.page.goto(`${ex.invite}#hk=${wrong}`);
+    await expect(p.page.getByText(/doesn.t match the host.s key/)).toBeVisible();
+    await expect(p.page.getByRole('button', { name: 'Join this exchange' })).toBeDisabled();
+    await p.ctx.close();
+  });
+
   test('an unknown invitation says so kindly, with a real 404 for the page itself', async ({ browser, request }) => {
     const p = await newPerson(browser);
     await p.page.goto('/g/0123456789abcdef0123456789abcdef');
@@ -228,7 +249,7 @@ test.describe('failure handling', () => {
     await p.page.goto(fx.members[0]!.link);
     const note = p.page.getByLabel(/Add a note/);
     await note.fill('🎁'.repeat(101));
-    await expect(p.page.getByText(/bytes too long/)).toBeVisible();
+    await expect(p.page.getByText(/note is too long for a memo/)).toBeVisible();
     await expect(p.page.getByRole('img', { name: /Payment request/ })).toHaveCount(0);
     await note.fill('🎁'.repeat(100));
     await expect(p.page.getByRole('img', { name: /Payment request/ })).toBeVisible();
