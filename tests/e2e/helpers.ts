@@ -56,9 +56,9 @@ export async function createExchange(page: Page, opts: { title: string; hostPlay
 
 /** Reveal the (hidden by default) private link on the save-link screen and return it. */
 export async function readSecretLink(page: Page): Promise<string> {
-  const box = page.locator('#link-box');
+  const box = page.getByLabel(/^Your (admin|private) link$/).first();
   await expect(box).toHaveValue(/^http/);
-  await page.getByRole('button', { name: 'Show' }).click();
+  await page.getByRole('button', { name: 'Show' }).first().click();
   return await box.inputValue();
 }
 
