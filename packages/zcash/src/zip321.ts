@@ -111,7 +111,8 @@ export function parsePaymentRequest(uri: string, opts: ParseOptions = {}): Payme
       const value = eq === -1 ? undefined : raw.slice(eq + 1);
       const m = NAME_RE.exec(nameIdx);
       if (!m) throw new Zip321Error('Invalid parameter name');
-      const name = m[1]!;
+      // ABNF quoted strings are case-insensitive, so 'AMOUNT' and 'Req-asset' are the known names too.
+      const name = m[1]!.toLowerCase();
       const idx = m[2] ?? '';
 
       switch (name) {
