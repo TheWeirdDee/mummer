@@ -1,4 +1,4 @@
-import { hashToken } from '@mummer/crypto';
+import { hashToken } from '@mummer/crypto/light';
 import { HttpError, type Deps, type Env } from './env.js';
 import { humanCheckRequired } from './services.js';
 
