@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Miniflare } from 'miniflare';
+import { resilientD1 } from './resilient-d1.js';
 import { runDraw } from '@mummer/draw';
 import {
   addressCommitment,
@@ -73,7 +74,8 @@ let ipCounter = 0;
 export async function createWorld(overrides: Partial<Env> = {}, depsOverrides: Partial<Deps> = {}): Promise<World> {
   await ready();
   const mf = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok") } }', d1Databases: { DB: `db-${Math.random().toString(36).slice(2)}` } });
-  const db = (await mf.getD1Database('DB')) as unknown as D1Database;
+  // See resilient-d1.ts: only connect-time port exhaustion on the loopback to Miniflare is retried; every other error is thrown unchanged.
+  const db = resilientD1((await mf.getD1Database('DB')) as unknown as D1Database);
   for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
     for (const s of statements(readFileSync(join(MIGRATIONS, file), 'utf8'))) await db.prepare(s).run();
   }
