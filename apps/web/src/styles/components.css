@@ -620,6 +620,48 @@ table.table {
 .table th[scope='row'] {
   font-weight: 650;
 }
+/* Narrow screens: each row becomes a labelled card instead of scrolling sideways. Roles are restored in ResponsiveTable. */
+@media (max-width: 40rem) {
+  table.table--stack {
+    min-width: 0;
+  }
+  .table--stack,
+  .table--stack tbody,
+  .table--stack tr,
+  .table--stack th,
+  .table--stack td {
+    display: block;
+  }
+  .table--stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table--stack tbody tr {
+    padding: var(--space-3) 0;
+    border-bottom: 2px solid var(--ink);
+  }
+  .table--stack tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .table--stack th,
+  .table--stack td {
+    border-bottom: 0;
+    padding: var(--space-1) var(--space-4);
+  }
+  .table--stack td[data-label]::before,
+  .table--stack th[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--fs-0);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+}
 .yes,
 .no {
   display: inline-flex;
