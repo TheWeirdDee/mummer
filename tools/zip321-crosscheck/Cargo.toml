@@ -1,0 +1,11 @@
+[package]
+name = "zip321-crosscheck"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Parses ZIP 321 URIs with the reference zip321 crate, so Mummer's TypeScript builder can be checked against an independent implementation. Not part of the shipped app."
+
+[dependencies]
+zip321 = "0.10"
+
+[workspace]
