@@ -18,6 +18,13 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
   const [state, setState] = useState<CredentialState>({ status: 'loading' });
   const [nonce, setNonce] = useState(0);
 
+  // Pasting a private link into a tab that is already on this page only changes the fragment: pick it up.
+  useEffect(() => {
+    const onHash = () => setNonce((n) => n + 1);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
