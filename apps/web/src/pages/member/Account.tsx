@@ -5,7 +5,7 @@ import { LinkSaver } from '../../components/LinkSaver';
 import { Button, Dialog, Notice } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { loadCrypto } from '../../lib/cryptoClient';
-import { forgetCredentials, saveCredentials, type StoredCredentials } from '../../lib/session';
+import { clearLinkSaved, forgetCredentials, saveCredentials, type StoredCredentials } from '../../lib/session';
 
 /** Link safety and recovery: back up, replace a possibly leaked link, leave, or forget this device. */
 export function Account({
@@ -16,7 +16,7 @@ export function Account({
   bundle,
   hasAssignment,
   drawn,
-  onCredsChanged,
+  onReplaced,
 }: {
   gid: string;
   mid: string;
@@ -25,13 +25,13 @@ export function Account({
   bundle: BundlePlain | undefined;
   hasAssignment: boolean;
   drawn: boolean;
-  onCredsChanged: () => void;
+  /** Called after the link was replaced and the new credentials were saved on this device. The page must then ask the person to save the NEW link. */
+  onReplaced: () => void;
 }) {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<'rotate' | 'leave' | 'forget' | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [fresh, setFresh] = useState<StoredCredentials>();
 
   const rotate = async () => {
     setBusy(true);
@@ -48,10 +48,12 @@ export function Account({
       };
       await api.rotate(gid, mid, creds.token, body);
       const next: StoredCredentials = { v: 1, role: 'member', groupId: gid, memberId: mid, secretKey: c.encodeKey(kp.secretKey), token };
+      // The old link is already dead server-side. Keep the new credentials on this device, require the new link to be
+      // saved again, and let the page (which survives the credential change) show the save-your-link step.
       saveCredentials(next);
-      setFresh(next);
-      onCredsChanged(); // keep polling with the new token while the new link is being saved
+      clearLinkSaved('member', gid);
       setDialog(undefined);
+      onReplaced();
     } catch (e) {
       setError((e as ApiError).message);
       setDialog(undefined);
@@ -71,25 +73,6 @@ export function Account({
       setBusy(false);
     }
   };
-
-  if (fresh) {
-    return (
-      <div className="stack">
-        <Notice tone="success" title="Your link was replaced">
-          <p>The old link no longer works. Save the new one below. It&rsquo;s the only copy.</p>
-        </Notice>
-        <LinkSaver
-          creds={fresh}
-          kind="member"
-          title={title}
-          onSaved={() => {
-            setFresh(undefined);
-            onCredsChanged();
-          }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="stack">
