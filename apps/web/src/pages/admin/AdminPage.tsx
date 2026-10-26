@@ -7,6 +7,7 @@ import { Badge, Button, CopyField, Dialog, Disclosure, Notice, ProgressBar, Skel
 import { api, ApiError } from '../../lib/api';
 import { formatCalendarDate, formatInstant, formatUsd, plural, untilLabel } from '../../lib/format';
 import { useAsync, usePageMeta, usePolling } from '../../lib/hooks';
+import { CredentialConflict } from '../../components/CredentialConflict';
 import { forgetCredentials, isLinkSaved, type StoredCredentials } from '../../lib/session';
 import { useCredentials } from '../../lib/useCredentials';
 import { DrawPanel } from './DrawPanel';
@@ -24,13 +25,20 @@ export const STATE_LABEL: Record<GroupState, string> = {
 export function AdminPage() {
   const { gid = '' } = useParams();
   usePageMeta('Host dashboard | Mummer', 'Manage your Mummer exchange: invite people, draw names and watch progress.', { index: false });
-  const { state, reload: reloadCreds } = useCredentials('admin', gid);
+  const { state, reload: reloadCreds, resolveConflict } = useCredentials('admin', gid);
 
   if (state.status === 'loading') {
     return (
       <PageContainer>
         <h1 className="sr-only">Loading your exchange</h1>
         <SkeletonLines lines={6} />
+      </PageContainer>
+    );
+  }
+  if (state.status === 'conflict') {
+    return (
+      <PageContainer narrow>
+        <CredentialConflict what="admin" onChoose={resolveConflict} />
       </PageContainer>
     );
   }
@@ -46,7 +54,7 @@ export function AdminPage() {
           </p>
         </Notice>
         <div className="btn-row">
-          <Link to="/recover" className="btn btn--primary">I have a backup</Link>
+          <Link to="/recover" className="btn btn--primary">Restore from a backup or link</Link>
           <Link to="/" className="btn btn--secondary">Go home</Link>
         </div>
       </PageContainer>
@@ -113,9 +121,10 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
   const state = g.state as GroupState;
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [confirm, setConfirm] = useState<'delete' | 'close' | 'reset' | 'resolve' | undefined>();
+  const [confirm, setConfirm] = useState<'delete' | 'close' | 'reset' | 'resolve' | 'flag' | 'dates' | undefined>();
   const [deleteName, setDeleteName] = useState('');
-  const invite = `${window.location.origin}/g/${gid}`;
+  // The fragment holds only the host's PUBLIC key; joiners' browsers compare it with what the server serves.
+  const invite = `${window.location.origin}/g/${gid}#hk=${g.hostPublicKey}`;
   const p = view.progress;
   const drawn = hasDraw(state);
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
@@ -194,7 +203,7 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
           {(state === 'open' || state === 'locked') && (
             <section className="card" aria-labelledby="invite-title">
               <h2 id="invite-title" style={{ fontSize: 'var(--fs-4)' }}>Invite people</h2>
-              <p>Share this link with your group. It contains no secrets.</p>
+              <p>Share this whole link with your group. It contains no secrets: after the # is only your <em>public</em> key, which lets each person&rsquo;s browser check that the server hasn&rsquo;t swapped it.</p>
               <CopyField label="Invite link" value={invite} mono={false} describe="invite link" />
               <div className="btn-row">
                 {canShare && (
@@ -258,8 +267,8 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
               <h2 id="progress-title" style={{ fontSize: 'var(--fs-4)' }}>Progress</h2>
               <p className="muted">Counts only. Mummer doesn&rsquo;t know who gave to whom, so it can&rsquo;t tell you who is still to send.</p>
               <div className="stack">
-                <ProgressBar value={p.reportedSent} max={Math.max(p.assigned, 1)} label={<><span>Givers who say they sent</span><span>{p.reportedSent} / {p.assigned}</span></>} />
-                <ProgressBar value={p.acknowledged} max={Math.max(p.assigned, 1)} label={<><span>Gifts confirmed by recipients</span><span>{p.acknowledged} / {p.assigned}</span></>} />
+                <ProgressBar ariaLabel="Givers who say they sent" value={p.reportedSent} max={Math.max(p.assigned, 1)} label={<><span>Givers who say they sent</span><span>{p.reportedSent} / {p.assigned}</span></>} />
+                <ProgressBar ariaLabel="Recipients who say it arrived" value={p.acknowledged} max={Math.max(p.assigned, 1)} label={<><span>Recipients who say it arrived</span><span>{p.acknowledged} / {p.assigned}</span></>} />
               </div>
               <p className="muted" style={{ marginTop: 'var(--space-3)' }}>
                 &ldquo;Sent&rdquo; is each giver&rsquo;s own note, and &ldquo;confirmed&rdquo; is each recipient&rsquo;s own report. Neither is proof of payment.
@@ -283,6 +292,7 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
           <section className="card" aria-labelledby="manage-title">
             <h2 id="manage-title" style={{ fontSize: 'var(--fs-4)' }}>Manage</h2>
             <div className="stack">
+              {(state === 'open' || state === 'locked') && <ChangeDates gid={gid} token={creds.token} joinDeadline={g.joinDeadline} revealDate={g.revealDate} onChanged={reload} />}
               {state === 'drawn' && (
                 <div>
                   <p>No one has reported sending yet, so you can still redraw from scratch.</p>
@@ -292,17 +302,17 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
               {(state === 'drawn' || state === 'active') && (
                 <div>
                   <p>Something went wrong that needs people to sort out together?</p>
-                  <Button onClick={() => act('flag', 'flag_resolution')} loading={busy === 'flag'}>Flag as needing attention</Button>
+                  <Button onClick={() => setConfirm('flag')}>Flag as needing attention</Button>
                 </div>
               )}
               {state !== 'closed' && (
                 <div>
-                  <p>Closing archives the exchange. Nobody can send, confirm or reveal after that.</p>
+                  <p>Closing archives the exchange. Nobody can record sending, confirm or reveal after that, and givers who haven&rsquo;t sent yet lose access to the payment details.</p>
                   <Button onClick={() => setConfirm('close')}>Close the exchange</Button>
                 </div>
               )}
               <div>
-                <p>Deleting removes every row the server holds for this exchange, immediately. It can&rsquo;t remove screenshots or blockchain records.</p>
+                <p>Deleting removes everything Mummer&rsquo;s database holds for this exchange, immediately. It can&rsquo;t remove screenshots, blockchain records or any backups the hosting platform may keep.</p>
                 <Button variant="danger" onClick={() => setConfirm('delete')}>Delete the exchange</Button>
               </div>
             </div>
@@ -320,6 +330,19 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
       </div>
 
       <Dialog
+        open={confirm === 'flag'}
+        onClose={() => setConfirm(undefined)}
+        title="Tell everyone something went wrong?"
+        actions={
+          <>
+            <Button onClick={() => setConfirm(undefined)}>Not now</Button>
+            <Button variant="primary" onClick={() => act('flag', 'flag_resolution')} loading={busy === 'flag'}>Flag the exchange</Button>
+          </>
+        }
+      >
+        <p>Every participant will see that the host flagged this exchange. It doesn&rsquo;t change any assignments. Use it when something needs sorting out as a group, such as a missing gift or someone leaving.</p>
+      </Dialog>
+      <Dialog
         open={confirm === 'close'}
         onClose={() => setConfirm(undefined)}
         title="Close this exchange?"
@@ -330,7 +353,7 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
           </>
         }
       >
-        <p>It becomes read-only. Nobody can send, confirm or reveal after this. You can still delete it later.</p>
+        <p>It becomes read-only. Nobody can record sending, confirm or reveal after this, and givers who haven&rsquo;t sent yet lose access to the payment details. You can still delete it later.</p>
       </Dialog>
       <Dialog
         open={confirm === 'reset'}
@@ -373,6 +396,38 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
         <TextField label={`Type “${g.title}” to confirm`} value={deleteName} onChange={(e) => setDeleteName(e.target.value)} autoComplete="off" />
       </Dialog>
     </PageContainer>
+  );
+}
+
+function ChangeDates({ gid, token, joinDeadline, revealDate, onChanged }: { gid: string; token: string; joinDeadline: string; revealDate: string; onChanged: () => void }) {
+  const [join, setJoin] = useState(joinDeadline);
+  const [reveal, setReveal] = useState(revealDate);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string }>();
+  const changed = join !== joinDeadline || reveal !== revealDate;
+  const save = async () => {
+    setBusy(true);
+    setMsg(undefined);
+    try {
+      await api.extend(gid, token, { joinDeadline: join, revealDate: reveal });
+      setMsg({ tone: 'ok', text: 'Dates updated. If joining had closed, it is open again.' });
+      onChanged();
+    } catch (e) {
+      setMsg({ tone: 'bad', text: (e as ApiError).message });
+    }
+    setBusy(false);
+  };
+  return (
+    <div>
+      <Disclosure summary="Change the dates (for example to give a small group more time)">
+        <div className="grid-2">
+          <TextField label="People can join until" type="date" value={join} onChange={(e) => setJoin(e.target.value)} />
+          <TextField label="Reveal date" type="date" value={reveal} onChange={(e) => setReveal(e.target.value)} />
+        </div>
+        <Button onClick={save} loading={busy} disabled={!changed}>Save new dates</Button>
+        {msg && <p role="status" className={msg.tone === 'ok' ? 'yes' : 'no'} style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)', marginTop: 'var(--space-3)' }}>{msg.text}</p>}
+      </Disclosure>
+    </div>
   );
 }
 
