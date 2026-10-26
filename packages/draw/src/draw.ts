@@ -159,7 +159,7 @@ export function runDraw(opts: DrawOptions): DrawResult {
   }
 
   // 2. Bounded randomized search for a Hamiltonian cycle in the allowed graph.
-  const budget = opts.maxSearchNodes ?? 250_000;
+  const budget = opts.maxSearchNodes ?? 20_000;
   let nodes = 0;
   const start = order[0]!;
   const visited = new Set<string>([start]);
