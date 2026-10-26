@@ -71,6 +71,20 @@ Dated 26 October 2026 unless noted. PRD v1.0 (revised) takes precedence over PRD
 
 **D-22. Unknown URLs** return an HTTP 404 while still serving the app shell so the in-app not-found page renders.
 
+**D-23. Address commitment.** Each join sends `SHA-256` over length-prefixed (group id, NFC nickname, address). The host's browser checks every opened profile against it and the giver's browser checks the roster entry before rendering a payment request. Purpose: detect a database-only swap. Cost: the hash could confirm a guessed address; accepted and documented.
+
+**D-24. Host-key fingerprint in the invite** (`#hk=<public key>`). The joiner's browser compares it with the key the server returns. A mismatch blocks joining; absence only warns, because hand-typed or older links must still work.
+
+**D-25. Members version.** `groups.members_version` increments on join, removal and rotation; the draw request carries it and the compare-and-swap includes it, so a roster that changed after the host read it cannot be drawn.
+
+**D-26. Glass box shows totals only.** Per-person sent and confirmed states are stored but not shown to the host, to avoid narrowing the pairing.
+
+**D-27. Credential conflicts.** A private link whose key differs from the key saved on the device is never applied silently. A link replacement is saved locally before the server is asked, so a lost response is recoverable.
+
+**D-28. Invisible and bidi characters** (U+200B to 200F, 202A to 202E, 2060 to 2064, 2066 to 2069, FEFF) are rejected in nicknames, titles, wishlists and memos.
+
+**D-29. Extend dates.** The host may change join and reveal dates before the draw; extending a locked group reopens it.
+
 ## 4. Scope not delivered (explicit)
 
 Host-blind draw (F14), independent shielded payment proof (F15), company-funded mode (F13), real-wallet verification (R01 to R03, R12), and any third-party review. See `docs/KNOWN_LIMITATIONS.md` and `docs/EVIDENCE.md`.
