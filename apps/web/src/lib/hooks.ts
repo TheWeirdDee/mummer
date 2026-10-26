@@ -6,7 +6,8 @@ export function useAsync<T>(fn: (signal: AbortSignal) => Promise<T>, deps: unkno
   const [state, setState] = useState<{ data?: T; error?: ApiError | Error; loading: boolean }>({ loading: true });
   const run = useCallback(
     (signal: AbortSignal, keepData: boolean) => {
-      setState((s) => ({ data: keepData ? s.data : undefined, loading: !keepData }));
+      // A reload keeps showing existing data, but a reload after a failure (no data yet) must show loading, not an empty state.
+      setState((s) => ({ data: keepData ? s.data : undefined, loading: !keepData || s.data === undefined }));
       fn(signal).then(
         (data) => {
           if (!signal.aborted) setState({ data, loading: false });
