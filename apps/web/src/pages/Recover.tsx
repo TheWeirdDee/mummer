@@ -121,7 +121,7 @@ export function Recover() {
             <h3>If you&rsquo;re a participant, before the draw</h3>
             <p>Open the invite link and join again with a new link. Ask the host to remove your old entry so your name is free.</p>
             <h3>If you&rsquo;re a participant, after the draw</h3>
-            <p>Your assignment is sealed to a key that only existed in your browser, so nobody can reopen it for you, including the host. Tell the host: they can flag the exchange for the group to sort out, or redraw if nobody has sent yet.</p>
+            <p>Your assignment is sealed to a key that only existed in your browser, so Mummer can&rsquo;t reopen it, and neither can the host unless they remember who they drew. Tell the host: they can flag the exchange for the group to sort out, or redraw from scratch if nobody has reported sending yet.</p>
           </div>
         </Disclosure>
 
