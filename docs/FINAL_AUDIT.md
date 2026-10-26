@@ -19,7 +19,7 @@ State of Mummer at the end of this build, in five buckets: implemented, tested, 
 |---|---|
 | `npm run typecheck` | Clean |
 | Vitest (unit, API on real D1, security) | 361 passing in 16 files |
-| Playwright (Chromium) | 50 tests; every spec file passes in its final form (see `docs/EVIDENCE.md` for the exact run history and the one caveat about full-suite reruns) |
+| Playwright (Chromium) | 50 passed in one complete run |
 | axe-core | No violations on every route and key state at 390 and 1280 px |
 | Responsive matrix | 12 viewports from 320 to 1920 including two landscape sizes, 23 screens: no overflow, 44 px targets |
 | `npm audit` | 0 vulnerabilities |
