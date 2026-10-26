@@ -48,7 +48,7 @@ function buildInner(deps: Deps): Hono<AppBindings> {
 
   app.onError((err, c) => {
     if (err instanceof HttpError) return c.json({ error: { code: err.code, message: err.message } }, err.status);
-    console.error('api_error', { route: new URL(c.req.url).pathname.replace(/[0-9a-f]{32}/g, ':id'), name: (err as Error).name });
+    console.error('api_error', describeError(err, c.req.method, new URL(c.req.url).pathname));
     return c.json({ error: { code: 'internal', message: 'Something went wrong on our side. Please try again.' } }, 500);
   });
 
@@ -68,6 +68,24 @@ function buildInner(deps: Deps): Hono<AppBindings> {
  * Logging policy: request bodies, tokens, addresses and IPs are NEVER logged.
  * Server errors log only a route label and a stable error code.
  */
+/**
+ * Diagnostics for an UNEXPECTED error (never an HttpError). Deliberately limited: method, the route with ids masked, the
+ * error name, a truncated message, and the first stack frames reduced to "function (file:line)". No request body, header,
+ * token, query string or id is ever included, and 32-hex ids or long base64url runs inside the message are masked.
+ */
+export function describeError(err: unknown, method: string, pathname: string) {
+  const e = err instanceof Error ? err : new Error(String(err));
+  const mask = (t: string) => t.replace(/[0-9a-f]{32}/g, ':id').replace(/[A-Za-z0-9_-]{40,}/g, ':blob');
+  const frames = (e.stack ?? '')
+    .split('\n')
+    .slice(1, 5)
+    .map((l) => mask(l.trim().replace(/^at /, '').replace(/\(?(?:file:\/\/)?[^)\s]*[\\/]([^\\/)\s]+:\d+):\d+\)?/, '($1)')));
+  // Node's fetch reports every network failure as the same "fetch failed"; the real reason is on `cause` (for example ECONNRESET).
+  const c = e.cause as { name?: string; code?: string; message?: string } | undefined;
+  const cause = c && typeof c === 'object' ? { name: String(c.name ?? ''), code: String(c.code ?? ''), message: mask(String(c.message ?? '')).slice(0, 200) } : undefined;
+  return { method, route: mask(pathname), name: e.name, message: mask(e.message).slice(0, 200), ...(cause ? { cause } : {}), frames };
+}
+
 export function createApp(deps: Deps = defaultDeps): Hono<AppBindings> {
   const inner = buildInner(deps);
   const outer = new Hono<AppBindings>();
