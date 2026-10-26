@@ -259,7 +259,7 @@ describe('replay, forgery and cross-context attacks', () => {
     const c = w.client();
     const host = await createGroup(c);
     const key = encodeKey(host.keys.publicKey);
-    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: 'Mallory', publicKey: key, tokenHash: hashToken(generateToken()), sealedProfile: 'A'.repeat(300) });
+    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: 'Mallory', publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(300) });
     expect(r.status).toBe(201);
     const prof = await c.get(`/api/groups/${host.groupId}/profiles`, host.token);
     expect(prof.status).toBe(200);
@@ -275,7 +275,7 @@ describe('injection and input hostility', () => {
     const key = encodeKey(host.keys.publicKey);
     const nasty = ["'; DROP TABLE members;--", '" OR 1=1 --', 'Robert\');DELETE FROM groups;--', '%_\\'];
     for (const [i, n] of nasty.entries()) {
-      const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: n, publicKey: key, tokenHash: hashToken(generateToken()), sealedProfile: 'A'.repeat(100 + i) });
+      const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: n, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(100 + i) });
       expect(r.status).toBe(201);
     }
     const g = await c.get(`/api/groups/${host.groupId}`, host.token);
@@ -293,7 +293,7 @@ describe('injection and input hostility', () => {
     const host = await createGroup(c);
     const key = encodeKey(host.keys.publicKey);
     const payload = '<img src=x onerror=alert(1)>';
-    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: payload, publicKey: key, tokenHash: hashToken(generateToken()), sealedProfile: 'A'.repeat(100) });
+    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: payload, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(100) });
     expect(r.status).toBe(201);
     const res = await c.get(`/api/groups/${host.groupId}`, host.token);
     expect(res.headers.get('content-type')).toContain('application/json');
@@ -338,7 +338,7 @@ describe('metadata minimisation', () => {
   it('the audit log holds group-level events only: no per-member post-draw actions', async () => {
     const s = await fullLifecycle();
     const rows = (await w.db.prepare('SELECT type FROM audit_events WHERE group_id = ?1').bind(s.host.groupId).all<{ type: string }>()).results.map((r) => r.type);
-    const allowed = new Set(['group_created', 'member_joined', 'draw_committed', 'reveal_declared', 'member_removed', 'member_revoked_after_draw', 'group_locked', 'group_reopened', 'draw_reset', 'resolution_flagged', 'resolution_cleared', 'group_closed']);
+    const allowed = new Set(['group_created', 'member_joined', 'draw_committed', 'reveal_declared', 'member_removed', 'member_revoked_after_draw', 'group_locked', 'group_reopened', 'draw_reset', 'resolution_flagged', 'resolution_cleared', 'group_closed', 'dates_changed']);
     for (const t of rows) expect(allowed.has(t), t).toBe(true);
     expect(rows.filter((t) => t === 'member_joined')).toHaveLength(6);
     expect(rows).not.toContain('acknowledged');
