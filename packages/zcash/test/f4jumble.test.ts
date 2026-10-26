@@ -42,5 +42,5 @@ describe('F4Jumble long vectors', () => {
     const jumbled = f4jumble(m);
     expect(base16.encode(blake2b(jumbled, { dkLen: 64 })).toLowerCase()).toBe(digest);
     expect(f4jumbleInv(jumbled)).toEqual(m);
-  }, 60000);
+  }, 180_000); // the two multi-megabyte vectors take about 30 s each in pure JS; real addresses are ~100 bytes so this is a test-only cost
 });
