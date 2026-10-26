@@ -1,4 +1,4 @@
-import { timingSafeEqual, hashToken } from '@mummer/crypto';
+import { timingSafeEqual, hashToken } from '@mummer/crypto/light';
 import { dayBucket, type GroupState } from '@mummer/shared';
 import { HttpError, type Deps, type Env } from './env.js';
 
@@ -20,6 +20,7 @@ export interface GroupRow {
   draw_idempotency_key: string | null;
   created_day: string;
   expires_at: string;
+  members_version: number;
 }
 
 export interface MemberRow {
@@ -33,6 +34,7 @@ export interface MemberRow {
   status: 'ready' | 'assigned' | 'removed' | 'revoked';
   sender_state: 'not_started' | 'user_reports_sent';
   joined_day: string;
+  address_commitment: string;
 }
 
 /** A hash no token can produce, used to equalise timing when a lookup misses. */
@@ -111,7 +113,14 @@ export function bumpStat(env: Env, key: 'groups_created' | 'members_joined' | 'g
   return env.DB.prepare('INSERT INTO stats (key, value) VALUES (?1, 1) ON CONFLICT (key) DO UPDATE SET value = value + 1').bind(key);
 }
 
-export function audit(env: Env, deps: Deps, groupId: string, type: string, version = 0): D1PreparedStatement {
+/**
+ * Insert a group-level audit event. With `onlyIfChanged`, the event is recorded only if the statement immediately
+ * before it in the batch changed a row (SQLite changes()), so a lost compare-and-swap leaves no false event.
+ */
+export function audit(env: Env, deps: Deps, groupId: string, type: string, version = 0, onlyIfChanged = false): D1PreparedStatement {
+  if (onlyIfChanged) {
+    return env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) SELECT ?1, ?2, ?3, ?4 WHERE changes() > 0').bind(groupId, type, dayBucket(deps.now()), version);
+  }
   return env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, ?4)').bind(groupId, type, dayBucket(deps.now()), version);
 }
 
