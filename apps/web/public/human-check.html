@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Human check</title>
+    <style>
+      html, body { margin: 0; background: transparent; font-family: system-ui, sans-serif; }
+      #widget { min-height: 70px; display: flex; align-items: center; justify-content: flex-start; }
+    </style>
+  </head>
+  <body>
+    <!--
+      This page is embedded by the app inside <iframe sandbox="allow-scripts">, which gives it an opaque
+      origin: Cloudflare's script cannot read the app's DOM, storage, keys or private-link fragments.
+      It is the ONLY page in Mummer that loads a third-party script (see docs/SECURITY.md).
+    -->
+    <div id="widget" aria-live="polite"></div>
+    <script src="/human-check.js"></script>
+  </body>
+</html>
