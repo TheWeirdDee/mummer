@@ -179,7 +179,7 @@ describe('recipient acknowledgment', () => {
     await s.c.post(ackUrl(s.host.groupId, recipient), { drawVersion: 1, outcome: 'received' }, recipient.token);
     const observer = s.members.find((m) => m.id !== giver.id && m.id !== recipient.id)!;
     const view = await s.c.get(`/api/groups/${s.host.groupId}`, observer.token);
-    expect(view.body.roster.every((r: any) => Object.keys(r).sort().join() === 'id,pseudonym,status')).toBe(true);
+    expect(view.body.roster.every((r: any) => Object.keys(r).sort().join() === 'addressCommitment,id,pseudonym,status')).toBe(true);
     expect(view.body.me).toMatchObject({ senderState: 'not_started', recipientState: 'not_acknowledged' });
     const text = JSON.stringify(view.body);
     expect(text).not.toContain('user_reports_sent');
