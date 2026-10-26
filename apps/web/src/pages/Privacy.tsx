@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout';
-import { Notice } from '../components/ui';
+import { Notice, ResponsiveTable } from '../components/ui';
 import { usePageMeta } from '../lib/hooks';
 
 export function Privacy() {
@@ -20,9 +20,7 @@ export function Privacy() {
         </p>
       </Notice>
 
-      <div className="table-wrap" tabIndex={0} role="region" aria-label="Who can see what, scroll horizontally on small screens">
-        <table className="table">
-          <caption className="sr-only">What each party can and cannot learn</caption>
+      <ResponsiveTable label="Who can see what, scroll horizontally on small screens" caption="What each party can and cannot learn">
           <thead>
             <tr>
               <th scope="col">Who</th>
@@ -41,7 +39,7 @@ export function Privacy() {
             <tr>
               <th scope="row">Mummer&rsquo;s server and database</th>
               <td>Group name, nicknames, budget, dates, counts, and sealed data it can&rsquo;t open. Stored times are whole days.</td>
-              <td>Wallet addresses, wishlists, memos, keys, and who drew whom.</td>
+              <td>Wallet addresses, wishlists, memos, keys, and who drew whom (except a pair a giver chooses to reveal).</td>
               <td>Your IP address and request timing, like any website. A malicious operator could serve altered code.</td>
             </tr>
             <tr>
@@ -81,8 +79,7 @@ export function Privacy() {
               <td>The link works like a password: don&rsquo;t share it. If it leaks, use &ldquo;Replace my link.&rdquo;</td>
             </tr>
           </tbody>
-        </table>
-      </div>
+        </ResponsiveTable>
 
       <div className="prose" style={{ marginTop: 'var(--space-7)' }}>
         <h2>What Mummer stores</h2>
@@ -101,7 +98,7 @@ export function Privacy() {
           </li>
         </ul>
         <p>
-          Hosts can see exactly what&rsquo;s stored for their exchange on the <Link to="/evidence">evidence page</Link> flow, inside the admin screen.
+          Hosts can open a redacted view of everything stored for their exchange from their admin page. The <Link to="/evidence">evidence page</Link> lists what has and hasn&rsquo;t been verified.
         </p>
 
         <h2>What we deliberately don&rsquo;t promise</h2>
