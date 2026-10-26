@@ -10,6 +10,9 @@ const MAX_STALE_MS = 5 * 60_000;
 let cached: { quote: PriceQuote; at: number } | undefined;
 
 /** Exact decimal extraction from the raw JSON text, so no binary floating point touches the value. */
+const MIN_USD_PER_ZEC = 1;
+const MAX_USD_PER_ZEC = 10_000;
+
 export function parseUsdPrice(text: string): string | undefined {
   const m = /"zcash"\s*:\s*\{\s*"usd"\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*\}/.exec(text);
   if (!m) return undefined;
@@ -17,7 +20,9 @@ export function parseUsdPrice(text: string): string | undefined {
   if (whole!.length > 7) return undefined;
   const rounded = frac.padEnd(8, '0').slice(0, 8);
   const price = `${whole}.${rounded}`;
-  return Number(price) > 0 ? price : undefined;
+  const n = Number(price);
+  // Sanity bounds: a wildly wrong upstream value (or a tampered price URL) must not turn into a wildly wrong payment amount.
+  return n >= MIN_USD_PER_ZEC && n <= MAX_USD_PER_ZEC ? price : undefined;
 }
 
 export async function fetchPriceFromProvider(env: Env, nowMs: number): Promise<PriceQuote> {
@@ -69,6 +74,7 @@ export const defaultDeps: Deps = {
 
 /** Human checks are enforced unless this is a non-production environment with no Turnstile secret configured. */
 export function humanCheckRequired(env: Env): boolean {
-  if (env.ENVIRONMENT === 'production') return true;
+  // Relaxed ONLY for the explicit development/test environments with no secret; any other value (or none) is treated as production.
+  if (env.ENVIRONMENT !== 'development' && env.ENVIRONMENT !== 'test') return true;
   return Boolean(env.TURNSTILE_SECRET);
 }
