@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { ZodType } from 'zod';
-import { isToken } from '@mummer/crypto';
+import { isToken } from '@mummer/crypto/light';
 import { HttpError, type AppBindings } from './env.js';
 
 export const MAX_BODY_BYTES = 96 * 1024;
