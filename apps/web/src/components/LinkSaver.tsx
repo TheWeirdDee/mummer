@@ -15,11 +15,14 @@ export function LinkSaver({
   kind,
   title,
   onSaved,
+  embedded = false,
 }: {
   creds: StoredCredentials;
   kind: 'admin' | 'member';
   title: string;
   onSaved: () => void;
+  /** Used inside another section (e.g. account settings): no landmark of its own, lower heading level. */
+  embedded?: boolean;
 }) {
   const uid = useId();
   const boxId = `${uid}-link`;
@@ -88,10 +91,14 @@ export function LinkSaver({
   };
 
   return (
-    <section className="card" aria-labelledby={`${uid}-title`}>
-      <h2 id={`${uid}-title`} style={{ fontSize: 'var(--fs-4)' }}>
-        Save your {label}
-      </h2>
+    <Wrapper className={embedded ? 'card card--flat' : 'card'} labelledBy={embedded ? undefined : `${uid}-title`}>
+      {embedded ? (
+        <h4 id={`${uid}-title`}>Copy or back up your {label}</h4>
+      ) : (
+        <h2 id={`${uid}-title`} style={{ fontSize: 'var(--fs-4)' }}>
+          Save your {label}
+        </h2>
+      )}
       <Notice tone="warn" title="This link is your key">
         <p>
           Anyone with it can {kind === 'admin' ? 'run this exchange' : 'open your assignment'} as you. Mummer can&rsquo;t recover it if it&rsquo;s lost, because the key it contains was made in this browser and never sent to us.
@@ -143,6 +150,16 @@ export function LinkSaver({
       <Button variant="primary" onClick={verify} disabled={paste.trim().length === 0}>
         Confirm I saved it
       </Button>
+    </Wrapper>
+  );
+}
+
+function Wrapper({ className, labelledBy, children }: { className: string; labelledBy?: string; children: React.ReactNode }) {
+  return labelledBy ? (
+    <section className={className} aria-labelledby={labelledBy}>
+      {children}
     </section>
+  ) : (
+    <div className={className}>{children}</div>
   );
 }
