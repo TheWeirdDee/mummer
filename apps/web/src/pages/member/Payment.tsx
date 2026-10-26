@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NOTE_MAX_BYTES, buildGiftMemo, buildPaymentRequest, formatZec, usdCentsToZat, utf8Length, validateGiftAddress, verifyPaymentRequest, type MemoError } from '@mummer/zcash';
-import type { BundlePlain } from '@mummer/shared';
+import type { BundlePlain, RosterEntry } from '@mummer/shared';
+import { addressCommitment } from '@mummer/crypto/light';
 import { QR } from '../../components/QR';
 import { Button, CopyButton, CopyField, Dialog, Notice, Spinner, TextAreaField } from '../../components/ui';
 import { api, ApiError, type PriceQuote } from '../../lib/api';
@@ -15,6 +16,8 @@ import type { StoredCredentials } from '../../lib/session';
  *  - the URI is re-parsed and compared field-for-field before the QR is drawn;
  *  - "sent" is only ever a self-report, never shown as payment success.
  */
+const sourceName = (host: string) => (host.includes('coingecko') ? 'CoinGecko' : host);
+
 export function Payment({
   gid,
   mid,
@@ -23,6 +26,8 @@ export function Payment({
   drawVersion,
   alreadyReportedSent,
   closed,
+  roster,
+  groupBudgetCents,
   onReported,
 }: {
   gid: string;
@@ -32,6 +37,10 @@ export function Payment({
   drawVersion: number;
   alreadyReportedSent: boolean;
   closed: boolean;
+  /** The group's public roster: each person's nickname and the fingerprint of the address they registered. */
+  roster: RosterEntry[];
+  /** The budget the group was created with (public), to compare with what the assignment says. */
+  groupBudgetCents: number;
   onReported: () => void;
 }) {
   const [price, setPrice] = useState<PriceQuote>();
@@ -59,6 +68,19 @@ export function Payment({
   }, []);
 
   const address = useMemo(() => validateGiftAddress(bundle.recipient.address), [bundle.recipient.address]);
+
+  // The host authors assignments, so before any payment request is shown, check the assignment against what the
+  // server publishes and the recipient's own browser registered: their address fingerprint, nickname and the budget.
+  const integrity = useMemo(() => {
+    const entry = roster.find((r) => r.id === bundle.recipient.memberId);
+    if (!entry) return 'The person you are giving to is no longer listed in this exchange.';
+    if (entry.pseudonym !== bundle.recipient.pseudonym) return 'The name in your assignment doesn’t match the group list.';
+    if (!entry.addressCommitment || addressCommitment(gid, entry.pseudonym, bundle.recipient.address) !== entry.addressCommitment) {
+      return `The address in your assignment isn’t the one ${entry.pseudonym} registered.`;
+    }
+    if (bundle.budgetCents !== groupBudgetCents) return 'The amount in your assignment doesn’t match the budget the group agreed.';
+    return undefined;
+  }, [roster, bundle, gid, groupBudgetCents]);
   const expired = price ? now.getTime() >= Date.parse(price.validUntil) : false;
   const secondsLeft = price ? Math.max(0, Math.round((Date.parse(price.validUntil) - now.getTime()) / 1000)) : 0;
 
@@ -77,6 +99,13 @@ export function Payment({
   }, [address, price, expired, bundle.budgetCents, bundle.reference, note]);
 
   const noteBytes = utf8Length(note.trim());
+  const fallbackMemo = useMemo(() => {
+    try {
+      return buildGiftMemo({ reference: bundle.reference, note });
+    } catch {
+      return '';
+    }
+  }, [bundle.reference, note]);
 
   const report = async () => {
     setBusy(true);
@@ -99,11 +128,19 @@ export function Payment({
     );
   }
 
+  if (integrity) {
+    return (
+      <Notice tone="danger" title="Don’t send anything yet" live="assertive">
+        <p>{integrity} That shouldn’t happen. It can mean the assignment was altered. Tell the group (and the host) before anyone sends, so it can be sorted out.</p>
+      </Notice>
+    );
+  }
+
   if (!address.ok) {
     return (
       <Notice tone="danger" title="We can’t build a payment for this address">
         <p>
-          The address your recipient registered didn&rsquo;t pass our checks: {address.message} Please <strong>don&rsquo;t send anything</strong>. Tell the host so they can ask {bundle.recipient.pseudonym} to rejoin with a valid address.
+          The address your recipient registered didn&rsquo;t pass our checks: {address.message} Please <strong>don&rsquo;t send anything</strong>. Tell the host. If nobody has reported sending yet, they can reset the draw so {bundle.recipient.pseudonym} can rejoin with a valid address; otherwise the group needs to arrange it another way.
         </p>
       </Notice>
     );
@@ -138,7 +175,7 @@ export function Payment({
               {formatZec(built.amountZat)} ZEC <span className="muted" style={{ fontWeight: 400 }}>≈ {formatUsd(bundle.budgetCents)}</span>
             </p>
             <p className="muted" style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)' }}>
-              At ${Number(price.usdPerZec).toLocaleString('en-US', { maximumFractionDigits: 2 })} per ZEC from {price.source}, as of {new Date(price.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Approximate: the price moves. This quote is good for {Math.floor(secondsLeft / 60)}:{(secondsLeft % 60).toString().padStart(2, '0')} more.
+              At ${Number(price.usdPerZec).toLocaleString('en-US', { maximumFractionDigits: 2 })} per ZEC from {sourceName(price.source)}, as of {new Date(price.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Approximate: the price moves. This quote is good for {Math.floor(secondsLeft / 60)}:{(secondsLeft % 60).toString().padStart(2, '0')} more.
             </p>
           </>
         )}
@@ -149,6 +186,16 @@ export function Payment({
               Get a fresh quote
             </Button>
           </Notice>
+        )}
+        {(priceError || expired) && !loadingPrice && (
+          <div className="card card--tint card--flat" style={{ marginTop: 'var(--space-4)' }}>
+            <h3 style={{ fontSize: 'var(--fs-3)' }}>You can still send without a quote</h3>
+            <p>
+              Without a current price Mummer can&rsquo;t work out the amount. Your gift is about {formatUsd(bundle.budgetCents)}: ask your wallet for that amount in ZEC at its own price, and use the details below. Or try again in a minute.
+            </p>
+            <CopyField label="Address" value={address.address} describe="address" />
+            {fallbackMemo && <CopyField label="Memo" value={fallbackMemo} describe="memo" />}
+          </div>
         )}
         {built?.error && (
           <Notice tone="danger" title="We can’t build the request" live="polite">
@@ -164,7 +211,7 @@ export function Payment({
         onChange={(e) => setNote(e.target.value)}
         rows={3}
         counter={{ value: noteBytes, max: NOTE_MAX_BYTES }}
-        error={noteBytes > NOTE_MAX_BYTES ? `That’s ${noteBytes - NOTE_MAX_BYTES} bytes too long. Emoji and accented letters use more than one byte each.` : undefined}
+        error={noteBytes > NOTE_MAX_BYTES ? 'That note is too long for a memo. Shorten it: emoji and accented letters take extra room.' : undefined}
       />
 
       {built && !built.error && (
@@ -191,7 +238,7 @@ export function Payment({
 
       {built && !built.error && (
         <div className="stack">
-          <CopyField label="Address" value={address.address} hint={`Starts ${address.address.slice(0, 8)}…, ends …${address.address.slice(-8)}. Compare these in your wallet.`} describe="address" />
+          <CopyField label="Address" value={address.address} hint={`Starts ${address.address.slice(0, 8)}…, ends …${address.address.slice(-8)}. Compare these with what your wallet shows. If you aren’t sure the address is right, ask ${bundle.recipient.pseudonym} to check the end of the address they saw when they joined.`} describe="address" />
           <CopyField label="Amount (ZEC)" value={formatZec(built.amountZat)} describe="amount" />
           <div className="field">
             <label htmlFor="memo-box">Memo</label>
@@ -207,7 +254,7 @@ export function Payment({
       <section className="card card--tint card--flat" aria-labelledby="check-title">
         <h3 id="check-title" style={{ fontSize: 'var(--fs-3)' }}>Before you approve in your wallet</h3>
         <ul className="checklist">
-          <li><span>The address matches the one above (check the first and last characters).</span></li>
+          <li><span>The address matches the one above (check the first and last characters). If in doubt, ask the recipient to check theirs.</span></li>
           <li><span>The amount matches, and it&rsquo;s a <strong>shielded</strong> payment.</span></li>
           <li><span>The memo starts with <code>MUMMER</code> and the reference.</span></li>
           <li><span>You&rsquo;re on the main Zcash network, not a test network.</span></li>
