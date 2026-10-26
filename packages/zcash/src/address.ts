@@ -96,16 +96,16 @@ class Reject extends Error {
 
 function readCompactSize(buf: Uint8Array, pos: number): [number, number] {
   const first = buf[pos];
-  if (first === undefined) throw new Reject('bad_encoding', 'This address is truncated.');
+  if (first === undefined) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   if (first < 0xfd) return [first, pos + 1];
   const size = first === 0xfd ? 2 : first === 0xfe ? 4 : 8;
-  if (pos + 1 + size > buf.length) throw new Reject('bad_encoding', 'This address is truncated.');
+  if (pos + 1 + size > buf.length) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   let v = 0n;
   for (let i = size - 1; i >= 0; i--) v = (v << 8n) | BigInt(buf[pos + 1 + i]!);
   // Canonical encoding is required (no padding of small values).
   const min = first === 0xfd ? 0xfdn : first === 0xfe ? 0x10000n : 0x100000000n;
-  if (v < min) throw new Reject('bad_encoding', 'This address is not canonically encoded.');
-  if (v > BigInt(Number.MAX_SAFE_INTEGER)) throw new Reject('bad_encoding', 'This address has an invalid length field.');
+  if (v < min) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
+  if (v > BigInt(Number.MAX_SAFE_INTEGER)) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   return [Number(v), pos + 1 + size];
 }
 
@@ -138,7 +138,7 @@ export function decodeUnifiedAddress(addr: string): UnifiedParts & { hrp: string
   }
 
   const jumbled = Uint8Array.from(bech32m.fromWords(decoded.words));
-  if (jumbled.length < F4_MIN_LEN) throw new Reject('bad_encoding', 'This address is too short to be valid.');
+  if (jumbled.length < F4_MIN_LEN) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   const raw = f4jumbleInv(jumbled);
 
   // The final 16 bytes must be the HRP zero-padded to 16 bytes.
@@ -162,44 +162,44 @@ export function decodeUnifiedAddress(addr: string): UnifiedParts & { hrp: string
     let len: number;
     [typecode, pos] = readCompactSize(body, pos);
     [len, pos] = readCompactSize(body, pos);
-    if (pos + len > body.length) throw new Reject('bad_encoding', 'This address is truncated.');
+    if (pos + len > body.length) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
     const data = body.subarray(pos, pos + len);
     pos += len;
     items++;
 
     // Ascending order also forbids repeated typecodes.
-    if (typecode <= prevTypecode) throw new Reject('bad_encoding', 'This address lists its receivers in an invalid order.');
+    if (typecode <= prevTypecode) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
     prevTypecode = typecode;
 
     switch (typecode) {
       case TC_P2PKH:
-        if (len !== 20) throw new Reject('bad_encoding', 'This address contains a malformed receiver.');
+        if (len !== 20) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.p2pkh = Uint8Array.from(data);
         nonMetadataItems++;
         break;
       case TC_P2SH:
-        if (len !== 20) throw new Reject('bad_encoding', 'This address contains a malformed receiver.');
+        if (len !== 20) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.p2sh = Uint8Array.from(data);
         nonMetadataItems++;
         break;
       case TC_SAPLING:
-        if (len !== 43) throw new Reject('bad_encoding', 'This address contains a malformed receiver.');
+        if (len !== 43) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.sapling = Uint8Array.from(data);
         nonMetadataItems++;
         break;
       case TC_ORCHARD:
-        if (len !== 43) throw new Reject('bad_encoding', 'This address contains a malformed receiver.');
+        if (len !== 43) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.orchard = Uint8Array.from(data);
         nonMetadataItems++;
         break;
       case TC_EXPIRY_HEIGHT:
         if (revision !== 2) throw new Reject('unsupported_receivers', 'This address uses metadata that is not valid for its version.');
-        if (len !== 4) throw new Reject('bad_encoding', 'This address contains a malformed expiry.');
+        if (len !== 4) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.expiryHeight = Number(leToBigInt(data));
         break;
       case TC_EXPIRY_TIME:
         if (revision !== 2) throw new Reject('unsupported_receivers', 'This address uses metadata that is not valid for its version.');
-        if (len !== 8) throw new Reject('bad_encoding', 'This address contains a malformed expiry.');
+        if (len !== 8) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
         parts.expiryTime = Number(leToBigInt(data));
         break;
       default:
@@ -222,11 +222,11 @@ export function decodeUnifiedAddress(addr: string): UnifiedParts & { hrp: string
     }
   }
 
-  if (items === 0 || nonMetadataItems === 0) throw new Reject('bad_encoding', 'This address contains no receivers.');
-  if (parts.p2pkh && parts.p2sh) throw new Reject('bad_encoding', 'This address mixes two kinds of transparent receiver.');
+  if (items === 0 || nonMetadataItems === 0) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
+  if (parts.p2pkh && parts.p2sh) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   const hasShielded = !!parts.orchard || !!parts.sapling;
   if (revision === 0 && !hasShielded) throw new Reject('no_shielded_receiver', 'This address has no shielded receiver.');
-  if (hrp === 'zu' && (parts.p2pkh || parts.p2sh)) throw new Reject('bad_encoding', 'This shielded-only address contains a transparent receiver.');
+  if (hrp === 'zu' && (parts.p2pkh || parts.p2sh)) throw new Reject('bad_encoding', 'This address looks damaged. Copy it again from your wallet.');
   return parts;
 }
 
@@ -241,7 +241,7 @@ function decodeSapling(addr: string): Uint8Array {
   if (decoded.prefix === 'ztestsapling') throw new Reject('testnet', 'This is a testnet address. Mummer works with mainnet addresses only.');
   if (decoded.prefix !== 'zs') throw new Reject('unknown_format', 'This is not a Zcash shielded address.');
   const bytes = Uint8Array.from(bech32.fromWords(decoded.words));
-  if (bytes.length !== 43) throw new Reject('sapling_bad_length', 'This shielded address has the wrong length.');
+  if (bytes.length !== 43) throw new Reject('sapling_bad_length', 'This address looks damaged. Copy it again from your wallet.');
   return bytes;
 }
 
