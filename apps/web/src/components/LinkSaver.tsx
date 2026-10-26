@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { downloadTextFile } from '../lib/browser';
 import { loadCrypto } from '../lib/cryptoClient';
 import { markLinkSaved, type StoredCredentials } from '../lib/session';
@@ -21,6 +21,8 @@ export function LinkSaver({
   title: string;
   onSaved: () => void;
 }) {
+  const uid = useId();
+  const boxId = `${uid}-link`;
   const [link, setLink] = useState<string>('');
   const [shown, setShown] = useState(false);
   const [paste, setPaste] = useState('');
@@ -86,8 +88,8 @@ export function LinkSaver({
   };
 
   return (
-    <section className="card" aria-labelledby="linksaver-title">
-      <h2 id="linksaver-title" style={{ fontSize: 'var(--fs-4)' }}>
+    <section className="card" aria-labelledby={`${uid}-title`}>
+      <h2 id={`${uid}-title`} style={{ fontSize: 'var(--fs-4)' }}>
         Save your {label}
       </h2>
       <Notice tone="warn" title="This link is your key">
@@ -97,15 +99,15 @@ export function LinkSaver({
       </Notice>
 
       <div className="field">
-        <label htmlFor="link-box">Your {label}</label>
+        <label htmlFor={boxId}>Your {label}</label>
         <p className="hint">Hidden by default so it doesn&rsquo;t end up in a screenshot. Copy it to a password manager, or download it.</p>
         <div className="copyfield">
-          <input id="link-box" className="input mono" type={shown ? 'text' : 'password'} readOnly value={link} aria-describedby="link-box-hint" autoComplete="off" spellCheck={false} />
+          <input id={boxId} className="input mono" type={shown ? 'text' : 'password'} readOnly value={link} aria-describedby={`${boxId}-hint`} autoComplete="off" spellCheck={false} />
           <Button size="small" onClick={() => setShown((s) => !s)} aria-pressed={shown}>
             {shown ? 'Hide' : 'Show'}
           </Button>
         </div>
-        <span id="link-box-hint" className="sr-only">
+        <span id={`${boxId}-hint`} className="sr-only">
           This field contains a secret link.
         </span>
       </div>
