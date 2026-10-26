@@ -60,10 +60,10 @@ export function AdminPage() {
       </PageContainer>
     );
   }
-  return <Dashboard gid={gid} creds={state.creds} persisted={state.persisted} onForget={reloadCreds} />;
+  return <Dashboard gid={gid} creds={state.creds} persisted={state.persisted} staleLink={!!state.staleLink} onForget={reloadCreds} />;
 }
 
-function Dashboard({ gid, creds, persisted, onForget }: { gid: string; creds: StoredCredentials; persisted: boolean; onForget: () => void }) {
+function Dashboard({ gid, creds, persisted, staleLink, onForget }: { gid: string; creds: StoredCredentials; persisted: boolean; staleLink: boolean; onForget: () => void }) {
   const group = useAsync((s) => api.group(gid, creds.token, s), [gid, creds.token]);
   usePolling(group.reload, 15_000, !!group.data);
   const [saved, setSaved] = useState(isLinkSaved('admin', gid));
@@ -113,10 +113,10 @@ function Dashboard({ gid, creds, persisted, onForget }: { gid: string; creds: St
     );
   }
 
-  return <Overview gid={gid} creds={creds} view={view} reload={group.reload} onForget={onForget} />;
+  return <Overview gid={gid} creds={creds} view={view} reload={group.reload} staleLink={staleLink} onForget={onForget} />;
 }
 
-function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: StoredCredentials; view: GroupView; reload: () => void; onForget: () => void }) {
+function Overview({ gid, creds, view, reload, staleLink, onForget }: { gid: string; creds: StoredCredentials; view: GroupView; reload: () => void; staleLink: boolean; onForget: () => void }) {
   const g = view.group;
   const state = g.state as GroupState;
   const [error, setError] = useState('');
@@ -176,6 +176,11 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
         <Badge tone={tone}>{STATE_LABEL[state]}</Badge>
       </div>
 
+      {staleLink && (
+        <Notice tone="info" title="That link has been replaced">
+          <p>The link you opened was replaced earlier. This device still has your current key, so you are signed in with that. Use your newest link from now on.</p>
+        </Notice>
+      )}
       {error && (
         <Notice tone="danger" title="That didn’t work" live="assertive">
           <p>{error}</p>
