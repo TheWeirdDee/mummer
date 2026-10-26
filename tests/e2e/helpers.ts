@@ -95,6 +95,13 @@ export async function drawNames(page: Page, adminLink: string) {
   await expect(page.getByText('The names are drawn')).toBeVisible();
 }
 
+/** Pass the save-your-link gate on the current page by pasting the link back, as a person would. */
+export async function passSaveLinkGate(page: Page) {
+  const link = await readSecretLink(page);
+  await page.getByLabel('Paste your link').fill(link);
+  await page.getByRole('button', { name: 'Confirm I saved it' }).click();
+}
+
 export const refOf = (memo: string): string => {
   const m = /MUM-[0-9A-Z]{4}(?:-[0-9A-Z]{4}){3}-[0-9A-Z]/.exec(memo);
   if (!m) throw new Error(`no reference in memo: ${memo}`);
