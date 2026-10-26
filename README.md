@@ -65,6 +65,8 @@ npm ci
 npx playwright install chromium
 ```
 
+Run the app locally with `npm run dev`, then open http://127.0.0.1:5173.
+
 Full instructions (local Worker, database migrations, environment): [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Testing
