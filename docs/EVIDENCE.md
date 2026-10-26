@@ -11,7 +11,7 @@ Environment: Windows 11, Node 24.13.1, Chromium from Playwright 1.64.1 (Chromium
 | Type check, all workspaces | `npm run typecheck` | No errors |
 | Unit, API integration and security tests | `npx vitest run` | **361 passed, 0 failed**, 16 files. Seven full runs were made after the last code change to those layers; six were clean and one had a single unexplained failure (see "Open anomaly") |
 | Production build | `npm run build` | Succeeds; `apps/web/dist` is 1.7 MB across 42 asset files, first-party only |
-| Browser end to end | `npx playwright test` | 50 tests. The last complete run before the final test edits was 45 passed and 4 failed; the 4 were then fixed (3 changed-copy assertions, 1 same-document fragment navigation that exposed a real defect), and the affected specs were re-run and passed. The responsive, accessibility and browser-security specs (31 tests) were re-run together after the final CSS and passed. The complete suite was not re-run as one command after the last edits; each spec file has passed in its final form |
+| Browser end to end | `npx playwright test` | **50 passed, 0 failed** in a single complete run (8.4 minutes) after the last code, test and doc-affecting changes. Earlier in the build an interim run had 4 failures (3 assertions on changed copy, 1 same-document fragment navigation that exposed a real defect: the host-key check ignored `hashchange`); all were fixed |
 | Dependency audit | `npm audit` | 0 vulnerabilities (patched `undici` 7.30.1 and `sharp` 0.35.5 pinned through `overrides`) |
 
 Counts per Vitest file: security 20; crypto 39 + 4; draw 20; shared 41; zcash 21 + 6 + 44; API: extend 10, flow 7, groups 42, hardening 17, join-draw 30, payments-reveal 25, routes 27, services 8.
