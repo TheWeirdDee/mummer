@@ -56,7 +56,7 @@ export function Receive({
         <div>
           <Notice tone="success" title="You confirmed this gift">
             <p>
-              {result ? (result.matched ? 'The reference you entered matched.' : 'You confirmed without a reference.') : 'You said you received it.'} This is your own report: Mummer can&rsquo;t see your payment, so it isn&rsquo;t proof of anything on its own.
+              {result ? (result.matched ? 'Mummer recognises the reference you entered. That doesn’t show that any money was sent.' : 'You confirmed without a reference.') : 'You said you received it.'} This is your own report: Mummer can&rsquo;t see your payment, so it isn&rsquo;t proof of anything on its own.
             </p>
           </Notice>
         </div>
@@ -76,7 +76,7 @@ export function Receive({
       )}
       <TextField
         label="Reference from the memo (optional)"
-        hint="Entering it lets Mummer check it belongs to a gift for you. It can’t prove who sent it or how much."
+        hint="Mummer can only check that it belongs to a gift for you. It can’t show that money moved, who sent it or how much."
         value={reference}
         onChange={(e) => setReference(e.target.value)}
         className="mono"
@@ -96,7 +96,7 @@ export function Receive({
         </Button>
         {state !== 'disputed' && (
           <Button disabled={closed} onClick={() => setDialog('problem')}>
-            Something&rsquo;s wrong
+            I didn&rsquo;t get it, or it looks wrong
           </Button>
         )}
       </div>
@@ -130,7 +130,7 @@ export function Receive({
           </>
         }
       >
-        <p>This tells the host that one recipient has a problem, for example nothing arrived or the amount looked wrong. They won&rsquo;t see who, and nobody&rsquo;s giver is revealed.</p>
+        <p>This tells the host that one recipient has a problem, for example nothing arrived or the amount looked wrong. They won&rsquo;t see who. Mummer doesn&rsquo;t know who your giver is, so it can&rsquo;t tell them either: if you want it sorted out, ask in your group.</p>
       </Dialog>
     </div>
   );
