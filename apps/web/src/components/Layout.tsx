@@ -116,7 +116,7 @@ function SiteFooter() {
       <div className="site-footer__fine">
         <div className="container">
           <p>
-            Mummer never holds or moves money and never asks for seed phrases or viewing keys. It is not a wallet, an exchange or financial advice. Gifts are paid from participants&rsquo; own wallets;
+            Mummer never holds or moves money and never asks for your wallet&rsquo;s secret recovery words or viewing keys (a viewing key lets someone see a wallet&rsquo;s history). It is not a wallet, an exchange or financial advice. Gifts are paid from participants&rsquo; own wallets;
             check every payment in your wallet before approving it.
           </p>
         </div>
