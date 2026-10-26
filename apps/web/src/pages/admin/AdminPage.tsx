@@ -378,7 +378,7 @@ function Overview({ gid, creds, view, reload, onForget }: { gid: string; creds: 
 
 function LinkSaverAgain({ creds, title }: { creds: StoredCredentials; title: string }) {
   // Re-uses the saver for copy/backup, without gating anything.
-  return <LinkSaver creds={creds} kind="admin" title={title} onSaved={() => undefined} />;
+  return <LinkSaver creds={creds} kind="admin" title={title} onSaved={() => undefined} embedded />;
 }
 
 function NextSteps({ state, revealOpensAt, timezone }: { state: GroupState; revealOpensAt: string; timezone: string }) {
