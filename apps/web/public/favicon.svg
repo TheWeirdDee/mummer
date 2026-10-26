@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Mummer">
+  <rect width="64" height="64" rx="12" fill="#F2ECDF"/>
+  <path fill="#17140F" fill-rule="evenodd" d="M7 29c0-12 14-18 25-18s25 6 25 18c0 13-10 22-17 20-5-1.500-6-7-8-7s-3 5.500-8 7c-7 2-17-7-17-20Zm10 0c3-4.500 12-4.500 15 1-3 5-12 5.500-15-1Zm30 0c-3-4.500-12-4.500-15 1 3 5 12 5.500 15-1Z"/>
+  <path fill="#9E2B25" d="M32 14.500 36 19l-4 4.500L28 19l4-4.500Z"/>
+</svg>
