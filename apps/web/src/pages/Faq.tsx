@@ -20,7 +20,7 @@ export function Faq() {
           <p>No. It never has your funds, your wallet&rsquo;s secret words, or a viewing key. It builds a payment request; your wallet decides whether to send it and you approve it there.</p>
         </Disclosure>
         <Disclosure summary="What does “shielded” mean?">
-          <p>Zcash has a transparent side, like most blockchains, and a shielded side. A shielded payment hides the sender, recipient and amount from the public ledger. Mummer accepts only shielded addresses for gifts and tells you why if you paste something else.</p>
+          <p>Zcash has a transparent side, like most blockchains, and a shielded side. A shielded payment hides the sender, recipient and amount from the public ledger. Mummer refuses addresses that are only transparent (public) and tells you why. A unified address that also has a transparent part is accepted with a warning.</p>
         </Disclosure>
         <Disclosure summary="Can the host see who drew whom?">
           <p>
@@ -47,7 +47,7 @@ export function Faq() {
           <p>Some wallets or versions ignore parts of a payment request. Every piece has its own copy button: the address, the amount and the memo. Paste them into your wallet and check them before you send.</p>
         </Disclosure>
         <Disclosure summary="What if a gift never arrives?">
-          <p>The recipient can mark &ldquo;Something&rsquo;s wrong.&rdquo; The host sees only a count of exchanges that need attention, not who. Resolving it happens outside Mummer, for example with a group-wide message. Mummer can&rsquo;t refund or retry a payment because it never held it.</p>
+          <p>The recipient can mark &ldquo;Something&rsquo;s wrong.&rdquo; The host sees only a count of recipients who reported a problem, not who. Resolving it happens outside Mummer, for example with a group-wide message. Mummer can&rsquo;t refund or retry a payment because it never held it.</p>
         </Disclosure>
         <Disclosure summary="Can a company pay for everyone's gifts?">
           <p>Not in this version. Each giver pays from their own wallet. A funding mode would need one separate payment per person, because the wallet we use rejects requests with several recipients, and it needs a privacy review of who funded whom.</p>
