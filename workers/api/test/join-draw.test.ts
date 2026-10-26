@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { encodeKey, generateKeyPair, generateToken, hashToken, sealProfile } from '@mummer/crypto';
+import { addressCommitment, encodeKey, generateKeyPair, generateToken, hashToken, sealProfile } from '@mummer/crypto';
 import { createGroup, createWorld, drawGroup, joinMember, NAMES, openOwnAssignment, setupGroup, testAddress, type World } from './harness.js';
 
 let w: World;
@@ -19,6 +19,7 @@ async function rawJoin(c: ReturnType<World['client']>, groupId: string, hostKeyB
     publicKey: encodeKey(keys.publicKey),
     tokenHash: hashToken(token),
     sealedProfile: sealProfile({ v: 1, kind: 'profile', groupId, pseudonym: name, wishlist: 'x', address: testAddress(1) }, hostKeyB64),
+    addressCommitment: addressCommitment(groupId, name, testAddress(1)),
     ...patch,
   };
   return { res: await c.post(`/api/groups/${groupId}/members`, body), body, token, keys };
@@ -212,11 +213,12 @@ describe('the draw: authorization, atomicity and idempotency', () => {
     const { c, host, members } = await setupGroup(w, 4);
     const first = await drawGroup(w, c, host, members, { key: 'a'.repeat(24) });
     expect(first.res.status).toBe(201);
-    const replay = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: 1, closeEarly: true, ...first.payload }, host.token, { 'idempotency-key': 'a'.repeat(24) });
+    const mv = (await w.db.prepare('SELECT members_version AS v FROM groups WHERE id = ?1').bind(host.groupId).first<{ v: number }>())!.v;
+    const replay = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: 1, membersVersion: mv, closeEarly: true, ...first.payload }, host.token, { 'idempotency-key': 'a'.repeat(24) });
     expect(replay.status).toBe(200);
     expect(replay.body).toEqual({ drawVersion: 1, replay: true });
     // The identical payload under a different key is a second draw attempt, not a replay.
-    const second = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: 1, closeEarly: true, ...first.payload }, host.token, { 'idempotency-key': 'b'.repeat(24) });
+    const second = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: 1, membersVersion: mv, closeEarly: true, ...first.payload }, host.token, { 'idempotency-key': 'b'.repeat(24) });
     expect(second.status).toBe(409);
     expect(second.body.error.code).toBe('draw_already_done');
     const n = await w.db.prepare('SELECT count(*) AS n FROM assignments WHERE group_id = ?1').bind(host.groupId).first<{ n: number }>();
@@ -325,7 +327,7 @@ async function buildOnly(c: ReturnType<World['client']>, host: Awaited<ReturnTyp
   if (!draw.ok) throw new Error('draw failed');
   const payload = buildDrawPayload({ groupId: host.groupId, drawVersion: 1, budgetCents: 2500, members: opened, assignments: draw.assignments });
   void members;
-  return { drawVersion: 1, closeEarly: true, ...payload };
+  return { drawVersion: 1, membersVersion: prof.body.membersVersion as number, closeEarly: true, ...payload };
 }
 
 export { joinMember };
