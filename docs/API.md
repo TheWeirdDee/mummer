@@ -36,12 +36,13 @@ Base path `/api`. JSON in and out. Source of truth: `workers/api/src/routes/*.ts
 
 | Method and path | Purpose |
 |---|---|
-| `GET /groups/:gid` | Overview (also readable by members): config, state, `drawVersion`, roster `{id, pseudonym, status}`, aggregate `progress` `{ready, assigned, reportedSent, acknowledged, needsAttention}`; members also get `me`. |
-| `GET /groups/:gid/profiles` | Sealed profiles for the draw. Only before the draw. |
-| `POST /groups/:gid/draw` | `{drawVersion, closeEarly?, bundles:[{memberId, sealedBundle}], commitments:[{memberId, commitment}]}` + `Idempotency-Key`. Validates that bundles and commitments cover **exactly** the ready members; commits state, bundles, commitments and audit event in one atomic batch whose first statement is a compare-and-swap. `201 {drawVersion, replay:false}`; same key replay `200 {replay:true}`; a second draw `409 draw_already_done`. |
+| `GET /groups/:gid` | Overview (also readable by members): config, state, `drawVersion`, roster `{id, pseudonym, status, addressCommitment}`, aggregate `progress` `{ready, assigned, reportedSent, acknowledged, needsAttention}`; members also get `me`. |
+| `GET /groups/:gid/profiles` | Sealed profiles for the draw, with `membersVersion` and each `addressCommitment`. Only before the draw. |
+| `POST /groups/:gid/extend` | `{joinDeadline, revealDate}`. Only while `open` or `locked`; validated like create; extending a locked group reopens it; one audit event `dates_changed`. |
+| `POST /groups/:gid/draw` | `{drawVersion, membersVersion, closeEarly?, bundles:[{memberId, sealedBundle}], commitments:[{memberId, commitment}]}` + `Idempotency-Key`. Validates that bundles and commitments cover **exactly** the ready members; commits state, bundles, commitments and audit event in one atomic batch whose first statement is a compare-and-swap. `201 {drawVersion, replay:false}`; same key replay `200 {replay:true}`; a second draw `409 draw_already_done`. |
 | `POST /groups/:gid/transition` | `{action}`: `lock`, `reopen`, `reset_draw` (only in `drawn`; deletes assignments, commitments and reveals), `flag_resolution`, `clear_resolution`, `close`. |
 | `DELETE /groups/:gid/members/:mid` | Before the draw: deletes the member. After: revokes the token, deletes the assignment, flags `needs_resolution`. |
-| `GET /groups/:gid/glassbox` | Every row held for the group, with sealed values reduced to length + fingerprint. |
+| `GET /groups/:gid/glassbox` | Every row held for the group, with sealed values reduced to length + fingerprint. Sent and confirmed states appear only as totals, never per person. |
 | `DELETE /groups/:gid` | Deletes everything (cascade). |
 
 ## Member
