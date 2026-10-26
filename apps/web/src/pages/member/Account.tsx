@@ -83,7 +83,7 @@ export function Account({
       )}
       <div>
         <h3 style={{ fontSize: 'var(--fs-3)' }}>Back up or re-copy my link</h3>
-        <LinkSaver creds={creds} kind="member" title={title} onSaved={() => undefined} />
+        <LinkSaver creds={creds} kind="member" title={title} onSaved={() => undefined} embedded />
       </div>
       <div>
         <h3 style={{ fontSize: 'var(--fs-3)' }}>Replace my link</h3>
