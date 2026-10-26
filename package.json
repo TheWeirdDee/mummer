@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:unit": "vitest run --project packages",
+    "test:crosscheck": "vitest run --config vitest.crosscheck.config.ts",
     "build": "npm run build -w @mummer/web",
     "dev": "node scripts/dev.mjs",
     "dev:api": "npm run dev -w @mummer/api",
