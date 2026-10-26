@@ -31,22 +31,15 @@ npx playwright test        # real-browser tests (starts its own server on port 8
 
 ## 3. Run locally for development
 
-Terminal 1, the API and static files together (port 8787):
+One command starts everything:
 
 ```bash
-cd workers/api
-printf 'ENVIRONMENT=development\nBUILD_COMMIT=local\nRATE_LIMIT_SALT=local-dev-salt\n' > .dev.vars   # gitignored
-npx wrangler d1 migrations apply mummer --local
-npx wrangler dev --local --port 8787
+npm run dev
 ```
 
-Terminal 2, optional hot-reloading front end (port 5173, proxies `/api` to 8787):
+`scripts/dev.mjs` creates a gitignored `workers/api/.dev.vars` if there is none, applies the migrations to a throwaway local database, then runs the Worker (API, port 8787) and the Vite dev server (web app with hot reload, port 5173, `/api` proxied). Open **http://127.0.0.1:5173**. Press Ctrl+C once to stop both. Nothing touches Cloudflare.
 
-```bash
-npm run dev:web
-```
-
-To serve the built app from the Worker instead, run `npm run build` first and open http://127.0.0.1:8787.
+The two halves can also be run separately: `npm run dev:api` (after `npm run -w @mummer/api migrate:local`) and `npm run dev:web`. To serve the built app from the Worker instead, run `npm run build` first and open http://127.0.0.1:8787.
 
 With `ENVIRONMENT=development` and no Turnstile secret, the human check is not required. With `ENVIRONMENT=production` (the default in `wrangler.toml`) it is required and **fails closed** if `TURNSTILE_SECRET` is missing.
 
