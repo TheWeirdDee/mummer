@@ -51,7 +51,10 @@ export async function createExchange(page: Page, opts: { title: string; hostPlay
   await expect(page.getByRole('heading', { level: 1, name: opts.title })).toBeVisible();
   const gid = new URL(link).pathname.split('/')[2]!;
   const origin = new URL(page.url()).origin;
-  return { gid, adminLink: link, invite: `${origin}/g/${gid}` };
+  // Read the invite from the page itself (it carries the host-key fingerprint in its fragment), exactly as a host would copy it.
+  const invite = await page.getByRole('textbox', { name: 'Invite link' }).inputValue();
+  expect(invite.startsWith(`${origin}/g/${gid}#hk=`)).toBe(true);
+  return { gid, adminLink: link, invite };
 }
 
 /** Reveal the (hidden by default) private link on the save-link screen and return it. */
