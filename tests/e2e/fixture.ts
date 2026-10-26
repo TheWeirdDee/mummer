@@ -1,5 +1,6 @@
 import { runDraw } from '@mummer/draw';
 import {
+  addressCommitment,
   buildDrawPayload,
   buildFragment,
   encodeKey,
@@ -53,6 +54,7 @@ export interface Fixture {
   gid: string;
   title: string;
   invite: string;
+  hostPublicKey: string;
   adminLink: string;
   host: { keys: KeyPair; token: string };
   members: FixtureMember[];
@@ -92,7 +94,7 @@ export async function makeExchange(opts: { title?: string; members?: number; dra
     const name = NAMES[i % NAMES.length]! + (i >= NAMES.length ? ` ${i}` : '');
     const wishlist = `${name} would love socks and a good book`;
     const sealedProfile = sealProfile({ v: 1, kind: 'profile', groupId: gid, pseudonym: name, wishlist, address: addresses[i % addresses.length]! }, encodeKey(hostKeys.publicKey));
-    const r = await call('POST', `/api/groups/${gid}/members`, { body: { pseudonym: name, publicKey: encodeKey(keys.publicKey), tokenHash: hashToken(token), sealedProfile } });
+    const r = await call('POST', `/api/groups/${gid}/members`, { body: { pseudonym: name, publicKey: encodeKey(keys.publicKey), tokenHash: hashToken(token), sealedProfile, addressCommitment: addressCommitment(gid, name, addresses[i % addresses.length]!) } });
     if (r.status !== 201) throw new Error(`join failed ${r.status} ${JSON.stringify(r.body)}`);
     members.push({ name, id: r.body.memberId, keys, token, address: addresses[i % addresses.length]!, wishlist, link: `${BASE}/g/${gid}/m/${r.body.memberId}${buildFragment({ secretKey: keys.secretKey, token })}` });
   }
@@ -102,13 +104,14 @@ export async function makeExchange(opts: { title?: string; members?: number; dra
     const d = runDraw({ memberIds: opened.map((m: any) => m.id) });
     if (!d.ok) throw new Error('draw failed');
     const payload = buildDrawPayload({ groupId: gid, drawVersion: 1, budgetCents: 2500, members: opened, assignments: d.assignments });
-    const r = await call('POST', `/api/groups/${gid}/draw`, { token: hostToken, body: { drawVersion: 1, closeEarly: true, ...payload }, headers: { 'idempotency-key': generateToken().slice(0, 32) } });
+    const r = await call('POST', `/api/groups/${gid}/draw`, { token: hostToken, body: { drawVersion: 1, membersVersion: prof.body.membersVersion, closeEarly: true, ...payload }, headers: { 'idempotency-key': generateToken().slice(0, 32) } });
     if (r.status !== 201) throw new Error(`draw post failed ${r.status} ${JSON.stringify(r.body)}`);
   }
   return {
     gid,
     title,
     invite: `${BASE}/g/${gid}`,
+    hostPublicKey: encodeKey(hostKeys.publicKey),
     adminLink: `${BASE}/g/${gid}/admin${buildFragment({ secretKey: hostKeys.secretKey, token: hostToken })}`,
     host: { keys: hostKeys, token: hostToken },
     members,
