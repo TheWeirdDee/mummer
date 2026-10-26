@@ -1,5 +1,5 @@
 import { PageContainer } from '../components/Layout';
-import { Notice } from '../components/ui';
+import { Notice, ResponsiveTable } from '../components/ui';
 import { usePageMeta } from '../lib/hooks';
 
 type Status = 'tested' | 'not-verified' | 'not-built';
@@ -11,7 +11,7 @@ const STATUS_LABEL: Record<Status, { text: string; cls: string }> = {
 };
 
 const CLAIMS: { claim: string; status: Status; evidence: string }[] = [
-  { claim: 'The server stores no plain-text wallet addresses, wishlists or pairings.', status: 'tested', evidence: 'Tests run a full exchange, then scan every database row and every request and response for those values.' },
+  { claim: 'The server stores no plain-text wallet addresses or wishlists, and no pairings except one a giver chooses to reveal.', status: 'tested', evidence: 'Tests run a full exchange, then scan every database row and every request and response for those values.' },
   { claim: 'Each person can open only their own assignment.', status: 'tested', evidence: 'An endpoint-by-role authorization matrix, cross-member and cross-group checks, and cryptographic wrong-key tests.' },
   { claim: 'The draw is a single cycle: nobody draws themselves, and exclusions are honored.', status: 'tested', evidence: '100,000 seeded draws with a statistical uniformity test, plus exclusion, impossibility and size tests.' },
   { claim: 'Addresses are checked by Zcash’s own rules (ZIP 316).', status: 'tested', evidence: 'Decoded against the official Zcash test vectors; transparent, test-network, typo and truncated addresses are refused with a reason.' },
@@ -23,6 +23,7 @@ const CLAIMS: { claim: string; status: Status; evidence: string }[] = [
   { claim: 'Proof that a gift was actually paid.', status: 'not-built', evidence: 'Shielded payments can’t be checked by Mummer. Confirmations are the recipient’s own report.' },
   { claim: 'A draw the host can’t see.', status: 'not-built', evidence: 'Needs a reviewed multi-party protocol. The host-run draw is clearly disclosed instead.' },
   { claim: 'Company-funded gifts.', status: 'not-built', evidence: 'The wallet we use rejects multi-recipient requests, and funding needs its own privacy review.' },
+  { claim: 'Works with screen readers.', status: 'not-verified', evidence: 'Automated checks (axe, WCAG 2.2 AA rules) and keyboard tests pass on every page; no manual session with a screen reader has been done.' },
   { claim: 'An independent security review.', status: 'not-verified', evidence: 'None has been done. The test suite is not a substitute for one.' },
 ];
 
@@ -48,9 +49,7 @@ export function Evidence() {
 
       <section aria-labelledby="claims-title">
         <h2 id="claims-title" style={{ fontSize: 'var(--fs-4)' }}>Claims and their status</h2>
-        <div className="table-wrap" tabIndex={0} role="region" aria-label="Claims and evidence, scroll horizontally on small screens">
-          <table className="table">
-            <caption className="sr-only">Each claim, whether it has been verified, and the evidence</caption>
+        <ResponsiveTable label="Claims and evidence, scroll horizontally on small screens" caption="Each claim, whether it has been verified, and the evidence">
             <thead>
               <tr>
                 <th scope="col">Claim</th>
@@ -69,16 +68,13 @@ export function Evidence() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </ResponsiveTable>
       </section>
 
       <section className="section" aria-labelledby="stored-title" style={{ paddingBottom: 0 }}>
         <h2 id="stored-title" style={{ fontSize: 'var(--fs-4)' }}>What the database holds</h2>
         <p className="measure">Every table, and what is readable by the server versus sealed. Hosts can open a live, redacted view of the rows for their own exchange from their admin page.</p>
-        <div className="table-wrap" tabIndex={0} role="region" aria-label="Database tables, scroll horizontally on small screens">
-          <table className="table">
-            <caption className="sr-only">Database tables and their contents</caption>
+        <ResponsiveTable label="Database tables, scroll horizontally on small screens" caption="Database tables and their contents">
             <thead>
               <tr>
                 <th scope="col">Table</th>
@@ -97,8 +93,7 @@ export function Evidence() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </ResponsiveTable>
       </section>
 
       <section className="section" aria-labelledby="limits-title" style={{ paddingBottom: 0 }}>
@@ -108,7 +103,7 @@ export function Evidence() {
             <p>Like any web app, Mummer could in principle serve you altered code. Strict content rules and the absence of third-party scripts on pages that hold secrets reduce the risk; they don&rsquo;t remove the need to trust whoever runs the site.</p>
           </Notice>
           <Notice tone="warn" title="Address substitution">
-            <p>Because sealing is anonymous, someone who controls the server could in principle swap one person&rsquo;s address for another. Always check the address in your wallet, and ask recipients to confirm their gift arrived.</p>
+            <p>The server can&rsquo;t tell who a sealed message came from, so someone who controls it could in principle replace one person&rsquo;s address with another&rsquo;s. Always check the address in your wallet, and ask recipients to confirm their gift arrived.</p>
           </Notice>
         </div>
       </section>
