@@ -11,8 +11,26 @@ import { HttpError, type Env } from './env.js';
 
 const enc = new TextEncoder();
 
+/**
+ * One IPv6 customer typically controls a whole /64, so keying on the full address would let a client rotate through
+ * billions of buckets. Bucket IPv6 by its /64 prefix; IPv4 and unknown stay as they are.
+ */
+export function normalizeClient(client: string): string {
+  if (!client.includes(':')) return client;
+  const [head = '', tail = ''] = client.split('::') as [string, string?];
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === '' ? [] : tail.split(':');
+  const missing = 8 - left.length - right.length;
+  const groups = client.includes('::') ? [...left, ...Array<string>(Math.max(missing, 0)).fill('0'), ...right] : left;
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-fA-F]{1,4}$/.test(g))) return client; // not an address we can parse: use as is
+  return `v6:${groups.slice(0, 4).map((g) => g.toLowerCase().padStart(4, '0')).join(':')}`;
+}
+
 export function bucketKey(env: Env, scope: string, client: string): string {
+  // The salt keeps a database dump from being reversed into client addresses. Production must set its own.
+  if (!env.RATE_LIMIT_SALT && env.ENVIRONMENT === 'production') throw new Error('RATE_LIMIT_SALT is not configured');
   const salt = env.RATE_LIMIT_SALT ?? 'mummer-dev-salt';
+  client = normalizeClient(client);
   return base16.encode(sha256(enc.encode(`${salt}\u{1f}${scope}\u{1f}${client}`))).toLowerCase();
 }
 
