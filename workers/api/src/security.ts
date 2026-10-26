@@ -35,6 +35,8 @@ export const FRAME_CSP = [
   "form-action 'none'",
   "object-src 'none'",
   "frame-ancestors 'self'",
+  // Even if loaded top-level or framed without the iframe attribute, this document gets an opaque origin.
+  'sandbox allow-scripts',
 ].join('; ');
 
 export function applySecurityHeaders(res: Response, pathname: string): Response {
