@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { copyText } from '../lib/browser';
 
@@ -230,7 +230,13 @@ export function Notice({ tone = 'info', title, children, live }: { tone?: keyof 
         {ICONS[tone]}
       </span>
       <div>
-        {title && <strong className="notice__title">{title}</strong>}
+        {title && (
+          <strong className="notice__title">
+            {tone === 'warn' && <span className="sr-only">Warning: </span>}
+            {tone === 'danger' && <span className="sr-only">Problem: </span>}
+            {title}
+          </strong>
+        )}
         {children}
       </div>
     </div>
@@ -260,12 +266,12 @@ export function SkeletonLines({ lines = 3 }: { lines?: number }) {
   );
 }
 
-export function ProgressBar({ value, max, label }: { value: number; max: number; label: ReactNode }) {
+export function ProgressBar({ value, max, label, ariaLabel = 'Progress' }: { value: number; max: number; label: ReactNode; ariaLabel?: string }) {
   const pct = max <= 0 ? 0 : Math.min(100, Math.round((value / max) * 100));
   return (
     <div className="progress">
       <div className="progress__label">{label}</div>
-      <div className="progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(value, max)} aria-label="Progress">
+      <div className="progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(value, max)} aria-label={ariaLabel}>
         <div className="progress__fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -386,5 +392,38 @@ export function StatusLine({ children, tone }: { children: ReactNode; tone?: 'ok
     <p role="status" aria-live="polite" className={tone === 'ok' ? 'yes' : tone === 'bad' ? 'no' : 'muted'} style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)' }}>
       {children}
     </p>
+  );
+}
+
+/**
+ * Data table that stacks into labelled cards on narrow screens, so no column is ever hidden off-screen.
+ * Each cell's label is read from its column header at runtime, so content changes cannot desynchronise them.
+ */
+export function ResponsiveTable({ label, caption, children }: { label: string; caption: string; children: ReactNode }) {
+  const ref = useRef<HTMLTableElement>(null);
+  useLayoutEffect(() => {
+    const table = ref.current;
+    if (!table) return;
+    const heads = Array.from(table.querySelectorAll('thead th')).map((h) => h.textContent ?? '');
+    // Stacked cards drop native table semantics in some browsers, so state them explicitly.
+    table.setAttribute('role', 'table');
+    table.querySelectorAll('thead, tbody').forEach((g) => g.setAttribute('role', 'rowgroup'));
+    table.querySelectorAll('tr').forEach((r) => r.setAttribute('role', 'row'));
+    table.querySelectorAll('thead th').forEach((h) => h.setAttribute('role', 'columnheader'));
+    table.querySelectorAll('tbody th').forEach((h) => h.setAttribute('role', 'rowheader'));
+    table.querySelectorAll('tbody td').forEach((d) => d.setAttribute('role', 'cell'));
+    table.querySelectorAll('tbody tr').forEach((row) => {
+      Array.from(row.children).forEach((cell, i) => {
+        if (i > 0 || cell.tagName === 'TD') cell.setAttribute('data-label', heads[i] ?? '');
+      });
+    });
+  });
+  return (
+    <div className="table-wrap" role="region" aria-label={label} tabIndex={0}>
+      <table className="table table--stack" ref={ref}>
+        <caption className="sr-only">{caption}</caption>
+        {children}
+      </table>
+    </div>
   );
 }
