@@ -54,7 +54,7 @@ The Worker also has a daily cron (`17 3 * * *` UTC) that deletes exchanges more 
 6. Open the browser console on every page: no errors, no blocked resources, no requests to third-party origins other than the `challenges.cloudflare.com` frame on create/join.
 7. Check that the Worker's logs contain no bodies, tokens or addresses (`wrangler tail` during a full flow).
 8. Inspect the deployed D1 data (`wrangler d1 execute mummer --remote --command "SELECT ..."`) for the exchange you just made: only sealed blobs and hashes.
-9. Re-run `npx playwright test` with `E2E_BASE_URL` pointed at the deployment for the read-only and security specs (the full-journey spec needs the test clock and is local only).
+9. The Playwright suite is **not** configured to run against a deployment: it starts its own local server with a controllable clock, a fixed price and a lenient human check (`workers/api/e2e`), and its fixtures post to the API directly. Against production, walk through checks 1 to 8 by hand and keep the notes in `docs/EVIDENCE.md`. Wiring a read-only smoke suite to a deployed URL is future work.
 
 ## Rollback
 
