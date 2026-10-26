@@ -70,6 +70,9 @@ export function forgetCredentials(role: 'admin' | 'member', groupId: string): vo
   try {
     s?.removeItem(key(role, groupId));
     s?.removeItem(`${PREFIX}saved:${role}:${groupId}`);
+    s?.removeItem(`${PREFIX}rotation:${groupId}`);
+    // Also forget this device's local reveal-day guesses for the exchange.
+    if (s) for (const k of Object.keys(s)) if (k.startsWith(`${PREFIX}guess:${groupId}:`)) s.removeItem(k);
   } catch {
     /* nothing to do */
   }
@@ -109,6 +112,31 @@ export function isLinkSaved(role: 'admin' | 'member', groupId: string): boolean 
     return storage()?.getItem(`${PREFIX}saved:${role}:${groupId}`) === '1';
   } catch {
     return false;
+  }
+}
+
+/* ---- Link replacement in flight: if the response is lost we can still recover the new credentials ---- */
+
+export function saveRotation(groupId: string, next: StoredCredentials): void {
+  try {
+    storage()?.setItem(`${PREFIX}rotation:${groupId}`, JSON.stringify(next));
+  } catch {
+    /* best effort */
+  }
+}
+export function loadRotation(groupId: string): StoredCredentials | undefined {
+  try {
+    const raw = storage()?.getItem(`${PREFIX}rotation:${groupId}`);
+    return raw ? (JSON.parse(raw) as StoredCredentials) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+export function clearRotation(groupId: string): void {
+  try {
+    storage()?.removeItem(`${PREFIX}rotation:${groupId}`);
+  } catch {
+    /* ignore */
   }
 }
 
