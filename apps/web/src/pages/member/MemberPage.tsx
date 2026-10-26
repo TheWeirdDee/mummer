@@ -66,8 +66,15 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
   const drawn = state ? hasDraw(state) : false;
   const assignment = useAssignment(gid, mid, creds, drawn && (view?.me?.status ?? '') === 'assigned', view?.group.drawVersion ?? 0);
   const [saved, setSaved] = useState(isLinkSaved('member', gid));
+  const [replaced, setReplaced] = useState(false);
   const [tab, setTab] = useState<'gift' | 'receive' | 'account'>('gift');
   useAppChrome({ title: view?.group.title, role: view?.me?.pseudonym });
+  const onReplaced = () => {
+    setReplaced(true);
+    setSaved(false);
+    reloadCreds();
+    window.scrollTo({ top: 0 });
+  };
 
   if (group.loading && !view) {
     return (
@@ -115,9 +122,14 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
           <p>It’s only in the address bar right now. Save your link below before you close this tab.</p>
         </Notice>
       )}
+      {replaced && !saved && (
+        <Notice tone="success" title="Your link was replaced">
+          <p>The old link no longer works. Save your new link below. It&rsquo;s the only copy.</p>
+        </Notice>
+      )}
       {!saved && (
         <div style={{ marginBottom: 'var(--space-5)' }}>
-          <LinkSaver creds={creds} kind="member" title={g.title} onSaved={() => setSaved(true)} />
+          <LinkSaver creds={creds} kind="member" title={g.title} onSaved={() => { setSaved(true); setReplaced(false); }} />
         </div>
       )}
 
@@ -210,7 +222,7 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
           <div role="tabpanel" id="panel-account" aria-labelledby="tab-account" hidden={tab !== 'account'}>
             <section className="card" aria-labelledby="acct-title">
               <h2 id="acct-title" style={{ fontSize: 'var(--fs-4)' }}>My link</h2>
-              <Account gid={gid} mid={mid} creds={creds} title={g.title} bundle={bundle} hasAssignment={me.hasAssignment} drawn={drawn} onCredsChanged={reloadCreds} />
+              <Account gid={gid} mid={mid} creds={creds} title={g.title} bundle={bundle} hasAssignment={me.hasAssignment} drawn={drawn} onReplaced={onReplaced} />
             </section>
           </div>
 
@@ -241,7 +253,7 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
 
       {!drawn && (
         <Disclosure summary="My link, backup and leaving">
-          <Account gid={gid} mid={mid} creds={creds} title={g.title} bundle={undefined} hasAssignment={false} drawn={false} onCredsChanged={reloadCreds} />
+          <Account gid={gid} mid={mid} creds={creds} title={g.title} bundle={undefined} hasAssignment={false} drawn={false} onReplaced={onReplaced} />
         </Disclosure>
       )}
     </PageContainer>
