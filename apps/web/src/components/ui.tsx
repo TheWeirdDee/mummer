@@ -351,6 +351,21 @@ export function Dialog({ open, onClose, title, children, actions }: { open: bool
         e.preventDefault();
         onClose();
       }}
+      onKeyDown={(e) => {
+        // Keep Tab / Shift+Tab inside the dialog (a native modal still lets focus escape to browser chrome).
+        if (e.key !== 'Tab') return;
+        const nodes = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])') ?? []).filter((n) => n.offsetParent !== null);
+        if (nodes.length === 0) return;
+        const first = nodes[0]!;
+        const last = nodes[nodes.length - 1]!;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
