@@ -61,4 +61,6 @@ Authorization matrix (every endpoint × none/foreign host/member/host), cross-me
 3. **Self-reported states:** "sent" and "received" are personal notes, never verified.
 4. **Metadata:** IP addresses and timing at the platform edge are outside Mummer's control and were not inspected.
 5. **Real Turnstile and real wallets** have not been exercised in this environment.
-6. Local storage on a device holds that person's key and token. XSS (prevented by CSP) or a hostile extension could read it.
+6. **Address and host-key checks are detection, not prevention** (see `docs/KNOWN_LIMITATIONS.md` item 6).
+7. One unexplained, unreproduced test flake (`docs/TESTING.md`).
+8. Local storage on a device holds that person's key and token. XSS (prevented by CSP) or a hostile extension could read it.
