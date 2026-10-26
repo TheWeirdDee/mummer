@@ -70,7 +70,7 @@ export function HumanCheck({ config, onChange }: { config: PublicConfig | undefi
       <span className="label" style={{ fontFamily: 'var(--font-ui)', fontWeight: 650, fontSize: 'var(--fs-1)' }}>
         Quick human check
       </span>
-      <p className="hint">This keeps bots from creating junk exchanges. It runs in an isolated frame and cannot see anything you type here.</p>
+      <p className="hint">This keeps bots from creating junk exchanges. Cloudflare runs the check, in a sandboxed frame that cannot see anything you type here.</p>
       {config.turnstileSiteKey && status !== 'passed' && (
         <iframe
           ref={frame}
@@ -85,7 +85,7 @@ export function HumanCheck({ config, onChange }: { config: PublicConfig | undefi
         {status === 'passed' && 'Check passed.'}
         {status === 'verifying' && 'Verifying…'}
         {status === 'failed' && (message || 'The human check did not pass. Please try again.')}
-        {status === 'unavailable' && 'The human check is not configured on this server, so this action is unavailable right now.'}
+        {status === 'unavailable' && 'Mummer can’t start new exchanges or accept new joins right now. Please try again later.'}
       </p>
     </div>
   );
