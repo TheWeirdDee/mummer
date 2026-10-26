@@ -5,6 +5,7 @@ import { LinkSaver } from '../../components/LinkSaver';
 import { Button, Dialog, Notice } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { loadCrypto } from '../../lib/cryptoClient';
+import { adoptPendingRotation } from '../../lib/credentialRecovery';
 import { clearLinkSaved, clearRotation, forgetCredentials, saveCredentials, saveRotation, type StoredCredentials } from '../../lib/session';
 
 /** Link safety and recovery: back up, replace a possibly leaked link, leave, or forget this device. */
@@ -36,8 +37,19 @@ export function Account({
   const rotate = async () => {
     setBusy(true);
     setError('');
+    let requested = false;
     try {
       if (hasAssignment && !bundle) throw new ApiError(0, 'unknown', 'Open your assignment first, then replace the link, so it can be re-sealed to your new key.');
+      // An earlier attempt may have succeeded without our hearing back. Settle that first: starting a second replacement
+      // with the old token would be refused and could lose the first one's new key.
+      const earlier = await adoptPendingRotation(gid, creds.token);
+      if (earlier === 'adopted') {
+        setDialog(undefined);
+        onReplaced();
+        setBusy(false);
+        return;
+      }
+      if (earlier === 'unknown') throw new ApiError(0, 'network', 'We couldn’t check whether your earlier replacement went through. Check your connection and try again.');
       const c = await loadCrypto();
       const kp = await c.generateKeyPair();
       const token = c.generateToken();
@@ -49,6 +61,7 @@ export function Account({
       const next: StoredCredentials = { v: 1, role: 'member', groupId: gid, memberId: mid, secretKey: c.encodeKey(kp.secretKey), token };
       // Keep the replacement on this device BEFORE asking the server: if the answer is lost we can still recover it.
       saveRotation(gid, next);
+      requested = true;
       await api.rotate(gid, mid, creds.token, body);
       clearRotation(gid);
       // The old link is already dead server-side. Keep the new credentials on this device, require the new link to be
@@ -61,8 +74,10 @@ export function Account({
       const ae = e as ApiError;
       // A definite refusal means nothing changed. A lost connection is ambiguous: keep the pending replacement; the page
       // will adopt it automatically if the old link turns out to have stopped working.
-      if (ae.code !== 'network') clearRotation(gid);
-      setError(ae.code === 'network' ? 'We lost the connection while replacing your link, so we can’t tell whether it worked. Reload this page: if your old link has stopped working, your new one is saved on this device and will be used automatically.' : ae.message);
+      // A refusal (4xx) means nothing changed. A lost connection or a server error is ambiguous and keeps the record.
+      const ambiguous = ae.code === 'network' || ae.status >= 500;
+      if (requested && !ambiguous) clearRotation(gid);
+      setError(ambiguous ? 'We lost the connection while replacing your link, so we can’t tell whether it worked. Reload this page: if your old link has stopped working, your new one is saved on this device and will be used automatically.' : ae.message);
       setDialog(undefined);
     }
     setBusy(false);
