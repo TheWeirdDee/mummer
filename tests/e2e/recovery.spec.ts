@@ -21,6 +21,26 @@ test.describe('lost, damaged and compromised links', () => {
     await p.ctx.close();
   });
 
+  test('a link whose key differs from the one saved here asks before replacing it, and keeping the saved key works', async ({ browser }) => {
+    const fx = await makeExchange({ members: 4, title: 'Conflict test' });
+    const m = fx.members[0]!;
+    const other = fx.members[1]!;
+    const p = await newPerson(browser);
+    await p.page.goto(m.link);
+    await expect(p.page.getByRole('heading', { level: 1, name: 'Conflict test' })).toBeVisible();
+    // Someone hands over a link for the same address but carrying a different key.
+    const foreign = `/g/${fx.gid}/m/${m.id}${other.link.slice(other.link.indexOf('#'))}`;
+    await p.page.goto('/');
+    await p.page.goto(foreign);
+    await expect(p.page.getByRole('heading', { name: 'This link is different from the one saved here' })).toBeVisible();
+    await p.page.getByRole('button', { name: 'Keep the key saved on this device' }).click();
+    await expect(p.page.getByRole('heading', { level: 1, name: 'Conflict test' })).toBeVisible();
+    // The foreign key never replaced the saved one: a reload still works without any fragment.
+    await p.page.goto(`/g/${fx.gid}/m/${m.id}`);
+    await expect(p.page.getByRole('heading', { level: 1, name: 'Conflict test' })).toBeVisible();
+    await p.ctx.close();
+  });
+
   test('a passphrase backup restores access on a fresh device; a wrong passphrase does not', async ({ browser }) => {
     const fx = await makeExchange({ members: 4, title: 'Backup test' });
     const m = fx.members[1]!;
@@ -105,7 +125,7 @@ test.describe('lost, damaged and compromised links', () => {
     await expect(p.page.getByRole('heading', { level: 1, name: 'Leave test' })).toBeVisible();
     await p.page.getByText('My link, backup and leaving').click();
     await p.page.getByRole('button', { name: 'Forget this device' }).first().click();
-    await p.page.getByRole('button', { name: 'Forget it' }).click();
+    await p.page.getByRole('button', { name: 'Remove my key from this device' }).click();
     await expect(p.page).toHaveURL(/\/$/);
     // Still a member server-side: the link still works from scratch.
     await p.page.goto(m.link);
