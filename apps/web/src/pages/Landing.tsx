@@ -1,12 +1,20 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MaskIcon, MaskRing } from '../components/Mask';
-import { Disclosure, LinkButton } from '../components/ui';
+import { Disclosure, LinkButton, Notice } from '../components/ui';
 import { usePageMeta } from '../lib/hooks';
 
 export function Landing() {
   usePageMeta('Mummer: Secret Santa with private gifts', 'Run a Secret Santa where gifts are paid in shielded Zcash from your own wallet. Mummer organizes the draw and never holds money.');
+  const [params] = useSearchParams();
   return (
     <>
+      {params.get('deleted') === '1' && (
+        <div className="container" style={{ paddingTop: 'var(--space-4)' }}>
+          <Notice tone="success" title="Exchange deleted" live="polite">
+            <p>Everything Mummer&rsquo;s database held for it has been removed. Screenshots and blockchain records can&rsquo;t be removed by us.</p>
+          </Notice>
+        </div>
+      )}
       <section className="hero" aria-labelledby="hero-title">
         <div className="container hero__inner">
           <div>
@@ -17,7 +25,7 @@ export function Landing() {
               <span className="accent">Private gifts.</span>
             </h1>
             <p className="lede rise rise--3">
-              Mummer draws the names and keeps count. Each gift is a shielded Zcash payment sent from your own wallet, so the payment doesn&rsquo;t announce who gave to whom.
+              Each gift is a small amount of Zcash, a privacy-focused digital currency, sent from your own wallet. Because it&rsquo;s a <em>shielded</em> payment, the public record doesn&rsquo;t show who paid whom or how much. Mummer organizes the draw and keeps count. Made for friend groups, offices and communities.
             </p>
             <div className="btn-row rise rise--3" style={{ marginTop: 'var(--space-5)' }}>
               <LinkButton to="/new" variant="primary" size="large">
@@ -27,7 +35,7 @@ export function Landing() {
                 See how it works
               </LinkButton>
             </div>
-            <p className="hero__note">Mummer never holds your money and never asks for your wallet&rsquo;s secret words. You need a Zcash wallet and a few dollars of ZEC. We&rsquo;ll walk you through both.</p>
+            <p className="hero__note">Mummer never holds your money and never asks for your wallet&rsquo;s secret recovery words. You&rsquo;ll need a Zcash wallet and a few dollars of ZEC, and we&rsquo;ll walk you through both. One honest limit: the host&rsquo;s browser draws the names, so the host could see who drew whom.</p>
           </div>
           <div className="hero__art">
             <MaskRing />
@@ -68,7 +76,7 @@ export function Landing() {
           <ol className="steps-grid">
             <li>
               <div className="card">
-                <h3>Start a group</h3>
+                <h3>Start an exchange</h3>
                 <p>Name it, set a budget and two dates, and share one invite link.</p>
               </div>
             </li>
@@ -87,13 +95,13 @@ export function Landing() {
             <li>
               <div className="card">
                 <h3>Send your gift</h3>
-                <p>Mummer builds a payment request. Your wallet checks it, you approve it, and the gift goes wallet to wallet.</p>
+                <p>Mummer builds a payment request. Your wallet shows it, you check it and approve it, and the gift goes wallet to wallet.</p>
               </div>
             </li>
             <li>
               <div className="card">
                 <h3>Confirm and reveal</h3>
-                <p>Recipients confirm what arrived. On reveal day, givers can choose to unmask, or stay a mummer.</p>
+                <p>Recipients say what arrived. On reveal day, givers can choose to unmask, or stay a mummer.</p>
               </div>
             </li>
           </ol>
@@ -131,6 +139,7 @@ export function Landing() {
                 <li>Your giver knows who they drew, and a recipient may guess their giver from timing or a note.</li>
                 <li>Your internet provider and Mummer&rsquo;s hosting can see that you visited, even though they can&rsquo;t read your assignment.</li>
                 <li>A &ldquo;received it&rdquo; confirmation is one person&rsquo;s word. It is not proof of payment.</li>
+                <li>Whoever runs this website could in principle serve altered code or swap an address, so always check the address in your wallet.</li>
               </ul>
             </div>
           </div>
@@ -146,13 +155,13 @@ export function Landing() {
             <p className="eyebrow" style={{ color: 'var(--gold-tint)' }}>
               What you need
             </p>
-            <h2 id="need-title">A wallet and about ten minutes</h2>
+            <h2 id="need-title">A wallet and a little ZEC</h2>
           </div>
           <div className="grid-3">
             <div>
               <h3>A Zcash wallet</h3>
               <p>
-                We use <strong>Zodl</strong> in our guides. Any wallet that can show a shielded address and read payment requests should work, and every step has a copy-and-paste fallback.
+                We use <strong>Zodl</strong> in our guides. Other wallets that support shielded addresses may work, but we haven&rsquo;t tested them. Every payment detail also has its own copy button.
               </p>
             </div>
             <div>
@@ -183,7 +192,7 @@ export function Landing() {
             <p>In this version, yes, if they try: the draw runs in the host&rsquo;s browser. Mummer&rsquo;s server never sees the pairings. If you want the organizer kept out of it, have someone who isn&rsquo;t playing host.</p>
           </Disclosure>
           <Disclosure summary="What does “shielded” mean?">
-            <p>It&rsquo;s a kind of Zcash payment where the sender, the recipient and the amount are hidden from the public ledger. Mummer only accepts shielded addresses for gifts.</p>
+            <p>It&rsquo;s a kind of Zcash payment where the sender, the recipient and the amount are hidden from the public ledger. Mummer refuses addresses that are only transparent (public).</p>
           </Disclosure>
           <Disclosure summary="What if I lose my link?">
             <p>Mummer can&rsquo;t recover it for you, because the keys never leave your browser. That&rsquo;s why you&rsquo;re asked to save the link, and can add a passphrase-protected backup.</p>
