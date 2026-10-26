@@ -53,6 +53,8 @@ export interface World {
   dispose(): Promise<void>;
   client(ip?: string): Client;
   db: D1Database;
+  /** Every request body the server received and every response body it sent, for leakage inspection. */
+  trace: { method: string; path: string; request: string; response: string; status: number }[];
 }
 
 function statements(sql: string): string[] {
@@ -95,6 +97,7 @@ export async function createWorld(overrides: Partial<Env> = {}, depsOverrides: P
     deps,
     priceFails,
     db,
+    trace: [],
     dispose: () => mf.dispose(),
     client: (ip) => new Client(world, ip ?? `203.0.113.${(++ipCounter % 250) + 1}`),
   };
@@ -122,6 +125,7 @@ export class Client {
     if (body !== undefined) headers['content-type'] = 'application/json';
     const res = await this.w.app.fetch(new Request(`https://mummer.test${path}`, { method, headers, body }), this.w.env);
     const text = await res.text();
+    this.w.trace.push({ method, path, request: body ?? '', response: text, status: res.status });
     let parsed: unknown = text;
     try {
       parsed = text ? JSON.parse(text) : undefined;
