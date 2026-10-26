@@ -1,5 +1,5 @@
 import { CryptoError } from './errors.js';
-import { randomBytes } from './sodium.js';
+import { randomBytes } from './random.js';
 
 /**
  * Gift reference: 80 random bits as 16 Crockford base32 characters plus one
