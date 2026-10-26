@@ -1,5 +1,5 @@
 import { PageContainer } from '../components/Layout';
-import { Notice, LinkButton } from '../components/ui';
+import { Notice, LinkButton, ResponsiveTable } from '../components/ui';
 import { usePageMeta } from '../lib/hooks';
 
 const ext = { target: '_blank', rel: 'noopener noreferrer' } as const;
@@ -11,7 +11,7 @@ export function WalletGuide() {
       <div className="page-head">
         <p className="eyebrow">Wallet guide</p>
         <h1>Get ready to give (and receive) a shielded gift</h1>
-        <p className="lede">New to Zcash? This takes about ten minutes. We use the Zodl wallet in examples; the ideas apply to any wallet that supports shielded addresses.</p>
+        <p className="lede">New to Zcash? Having a wallet ready takes a few minutes; getting ZEC into it can take longer. We use the Zodl wallet in examples; the ideas apply to wallets that support shielded addresses.</p>
       </div>
 
       <Notice tone="danger" title="Never type your secret words into Mummer">
@@ -52,10 +52,10 @@ export function WalletGuide() {
             <p>Gift budgets are small, so you only need a few dollars&rsquo; worth plus a tiny network fee. Common ways to get some:</p>
             <ul>
               <li>
-                <strong>Buy on an exchange</strong> that lists ZEC, then withdraw it to your wallet&rsquo;s <em>shielded</em> address from step 4. Exchanges often need ID checks, which can take a day.
+                <strong>Buy on an exchange</strong> that lists ZEC, then withdraw it to your wallet&rsquo;s <em>shielded</em> address from step 4. Exchanges often need ID checks, which can take a while.
               </li>
               <li>
-                <strong>Swap inside the wallet.</strong> Zodl has a swap feature that can convert other coins into ZEC. Availability and supported coins vary by region and version.
+                <strong>Swap inside the wallet.</strong> Some wallets can swap other coins for ZEC. Check your wallet&rsquo;s own help to see what is available where you live.
               </li>
               <li>
                 <strong>Ask a friend</strong> who already uses Zcash to send you a few dollars&rsquo; worth to your shielded address.
@@ -70,12 +70,10 @@ export function WalletGuide() {
           <div className="copy-tight">
             <h2 id="g4" style={{ fontSize: 'var(--fs-4)' }}>Find your shielded receiving address</h2>
             <p>
-              In the wallet, open <strong>Receive</strong>. Copy the address it shows. A shielded address usually starts with <code>u1</code> (a &ldquo;unified&rdquo; address) or <code>zs1</code> (an older shielded style). Zodl&rsquo;s changelog says it shows a shielded-only
+              In the wallet, open <strong>Receive</strong>. Copy the address it shows. A shielded address usually starts with <code>u1</code> (a &ldquo;unified&rdquo; address) or <code>zs1</code> (an older shielded style). Zodl&rsquo;s iOS release notes say it shows a shielded-only
               unified address and makes a fresh one each time you open Receive.
             </p>
-            <div className="table-wrap" tabIndex={0} role="region" aria-label="Which addresses Mummer accepts">
-              <table className="table">
-                <caption className="sr-only">Address types and whether Mummer accepts them</caption>
+            <ResponsiveTable label="Which addresses Mummer accepts" caption="Address types and whether Mummer accepts them">
                 <thead>
                   <tr>
                     <th scope="col">Starts with</th>
@@ -105,8 +103,7 @@ export function WalletGuide() {
                     <td><span className="no">Refused: Mummer uses the main network</span></td>
                   </tr>
                 </tbody>
-              </table>
-            </div>
+              </ResponsiveTable>
             <p style={{ marginTop: 'var(--space-4)' }}>Use a fresh address for each exchange so it isn&rsquo;t linked to anything else you do.</p>
           </div>
         </section>
@@ -128,7 +125,7 @@ export function WalletGuide() {
               </li>
             </ol>
             <Notice tone="warn" title="Scanning might not fill everything in">
-              <p>Wallets differ in how they read payment requests, and we haven&rsquo;t yet recorded a device test of every wallet and version. If the amount or memo is missing after you scan, type or paste them from the copy buttons. Never send if the address looks wrong.</p>
+              <p>Wallets differ in how they read payment requests, and we haven&rsquo;t tested Mummer&rsquo;s payment request on any real wallet yet. If the amount or memo is missing after you scan, paste them from the copy buttons. Never send if the address looks wrong.</p>
             </Notice>
           </div>
         </section>
