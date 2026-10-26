@@ -8,7 +8,8 @@ import { api, ApiError } from '../../lib/api';
 import { addressPreview, formatCalendarDate, formatInstant, formatUsd, plural, untilLabel } from '../../lib/format';
 import { useAsync, usePageMeta, usePolling } from '../../lib/hooks';
 import { CredentialConflict } from '../../components/CredentialConflict';
-import { clearRotation, isLinkSaved, loadRotation, saveCredentials, type StoredCredentials } from '../../lib/session';
+import { adoptPendingRotation, probeToken } from '../../lib/credentialRecovery';
+import { isLinkSaved, loadCredentials, type StoredCredentials } from '../../lib/session';
 import { useCredentials } from '../../lib/useCredentials';
 import { Account } from './Account';
 import { Payment } from './Payment';
@@ -54,7 +55,7 @@ export function MemberPage() {
       </PageContainer>
     );
   }
-  return <Home gid={gid} mid={mid} creds={state.creds} persisted={state.persisted} reloadCreds={reload} />;
+  return <Home gid={gid} mid={mid} creds={state.creds} persisted={state.persisted} staleLink={!!state.staleLink} reloadCreds={reload} />;
 }
 
 const STATE_COPY: Record<GroupState, string> = {
@@ -66,7 +67,7 @@ const STATE_COPY: Record<GroupState, string> = {
   closed: 'Closed',
 };
 
-function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: string; creds: StoredCredentials; persisted: boolean; reloadCreds: () => void }) {
+function Home({ gid, mid, creds, persisted, staleLink, reloadCreds }: { gid: string; mid: string; creds: StoredCredentials; persisted: boolean; staleLink: boolean; reloadCreds: () => void }) {
   const group = useAsync((s) => api.group(gid, creds.token, s), [gid, creds.token]);
   usePolling(group.reload, 15_000, !!group.data);
   const view = group.data;
@@ -75,20 +76,28 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
   const assignment = useAssignment(gid, mid, creds, drawn && (view?.me?.status ?? '') === 'assigned', view?.group.drawVersion ?? 0);
   const [saved, setSaved] = useState(isLinkSaved('member', gid));
   const [replaced, setReplaced] = useState(false);
-  // If a link replacement's answer was lost and the old token no longer works, adopt the new credentials saved before the request.
+  // This page's token stopped working. Two legitimate causes leave a working key on this device: another tab replaced
+  // the link (the saved credentials changed), or our own replacement succeeded but its reply was lost (a pending record).
+  // Either is adopted only after the server accepts that token; a revoked member is never let back in by this path.
   const groupError = group.error as ApiError | undefined;
   useEffect(() => {
     if (!groupError || groupError.status !== 401) return;
-    const pending = loadRotation(gid);
-    if (!pending || pending.token === creds.token) return;
-    api.group(gid, pending.token).then(
-      () => {
-        saveCredentials(pending);
-        clearRotation(gid);
+    let cancelled = false;
+    (async () => {
+      const stored = loadCredentials('member', gid);
+      if (stored && stored.token !== creds.token && (await probeToken(gid, stored.token)) === 'ok') {
+        if (!cancelled) reloadCreds();
+        return;
+      }
+      if ((await adoptPendingRotation(gid, creds.token)) === 'adopted' && !cancelled) {
+        setReplaced(true);
+        setSaved(false);
         reloadCreds();
-      },
-      () => clearRotation(gid),
-    );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupError]);
   const [tab, setTab] = useState<'gift' | 'receive' | 'account'>('gift');
@@ -144,6 +153,11 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
       {!persisted && !saved && (
         <Notice tone="warn" title="This browser can’t save your key">
           <p>It’s only in the address bar right now. Save your link below before you close this tab.</p>
+        </Notice>
+      )}
+      {staleLink && (
+        <Notice tone="info" title="That link has been replaced">
+          <p>The link you opened was replaced earlier. This device still has your current key, so you are signed in with that. Use your newest link from now on.</p>
         </Notice>
       )}
       {replaced && !saved && (
