@@ -96,6 +96,14 @@ export function markLinkSaved(role: 'admin' | 'member', groupId: string): void {
   }
 }
 
+export function clearLinkSaved(role: 'admin' | 'member', groupId: string): void {
+  try {
+    storage()?.removeItem(`${PREFIX}saved:${role}:${groupId}`);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function isLinkSaved(role: 'admin' | 'member', groupId: string): boolean {
   try {
     return storage()?.getItem(`${PREFIX}saved:${role}:${groupId}`) === '1';
