@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { CryptoError } from './errors.js';
 import { decodeKey, encodeKey } from './keys.js';
 import { isToken } from './tokens.js';
-import { randomBytes, sodium, wipe } from './sodium.js';
+import { sodium, wipe } from './sodium.js';
+import { randomBytes } from './random.js';
 
 /**
  * Passphrase-sealed backup of a private link's secrets (key + token), so a lost
