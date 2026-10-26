@@ -341,7 +341,8 @@ describe('security headers and routing', () => {
     for (const r of responses) {
       expect(r.headers.get('content-security-policy')).toContain("default-src 'none'");
       expect(r.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
-      expect(r.headers.get('content-security-policy')).not.toMatch(/unsafe-inline|unsafe-eval|https?:\/\//);
+      expect(r.headers.get('content-security-policy')).not.toMatch(/'unsafe-inline'|'unsafe-eval'|https?:\/\//);
+      expect(r.headers.get('content-security-policy')).toContain("script-src 'self' 'wasm-unsafe-eval'");
       expect(r.headers.get('referrer-policy')).toBe('no-referrer');
       expect(r.headers.get('strict-transport-security')).toContain('max-age=63072000');
       expect(r.headers.get('x-content-type-options')).toBe('nosniff');
