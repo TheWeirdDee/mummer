@@ -21,6 +21,12 @@ database_name = "mummer"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
+[observability]
+# New Workers get Workers Logs by default (invocation logs hold request metadata and console output is kept for days).
+# Mummer's privacy model does not need them, so persistence is off. Real-time debugging is still possible with `wrangler tail`
+# (not stored). Verify in the dashboard after the first deploy. See docs/DEPLOYMENT.md.
+enabled = false
+
 [triggers]
 # Daily retention purge (UTC).
 crons = ["17 3 * * *"]
