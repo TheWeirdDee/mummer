@@ -143,7 +143,7 @@ export function Landing() {
       <section className="section section--pine" aria-labelledby="need-title">
         <div className="container">
           <div className="section__head">
-            <p className="eyebrow" style={{ color: 'var(--gold)' }}>
+            <p className="eyebrow" style={{ color: 'var(--gold-tint)' }}>
               What you need
             </p>
             <h2 id="need-title">A wallet and about ten minutes</h2>
