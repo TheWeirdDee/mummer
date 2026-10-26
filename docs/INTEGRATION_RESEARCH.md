@@ -87,9 +87,58 @@ One QR cannot pay several recipients in Zodl (see row 9). A noncustodial design 
 |---|---|---|
 | R01 / R02 | Real Zodl iOS and Android: scan a Mummer QR; confirm address, amount and memo are filled in; send; receive and read the memo | **BLOCKED**: no physical devices, wallet funds or signing in this environment |
 | R03 | Zodl fresh-receiver generation on devices | Changelog only |
-| R05 | ZECATHON exact deadline, build window, bounty overlap | Requires the organizer; not researched here |
+| R05 | ZECATHON exact deadline, build window, bounty overlap | **Partly researched 2026-10-26** (see "Follow-up research"): the official site shows a 30-day build window and the **deadline appears to be 2026-10-28**, but the rules, judging criteria and licence requirements are behind a login and were **not read**; the date and prize split come from a search summary of a social post that could not be opened. **Confirm on the official site before relying on it** |
 | R06 | Per-payment selective disclosure | Not built |
-| R09 | What Cloudflare logs and retains at the edge | Platform settings not inspectable without an account; the privacy copy makes no claim beyond "hosting providers can see connections" |
+| R09 | What Cloudflare logs and retains at the edge | Documentation read 2026-10-26 (see `docs/DEPLOYMENT.md`): Workers Logs are on by default for new Workers (3 days on Free) and are now disabled explicitly in `wrangler.toml`; Cloudflare's privacy policy says end-user data may include IP addresses and gives **no retention figure**. Account settings are not inspectable without an account, so the privacy copy still claims nothing beyond "hosting providers can see connections" |
 | R10 | Recovery on real devices | Covered by browser tests of link replacement, backup restore and leaving; device-loss on real phones not exercised |
-| R11 | Domain and trademark for "Mummer" | Not researched |
+| R11 | Domain and trademark for "Mummer" | **Researched with public searches only 2026-10-26** (see "Follow-up research"). Not a clearance; no counsel or official trademark-database search was possible |
 | R12 | A consenting group of 4 to 5 completing a real shielded exchange | **BLOCKED**: requires real funds and people |
+
+## Follow-up research, 2026-10-26
+
+All items were read on 2026-10-26 by an automated research pass using public web pages, GitHub's API and RDAP. Where a statement rests only on a search summary it is labelled. None of this was tested on a device.
+
+### ZECATHON (gate R05)
+
+- Run by "zkSNARKs" (not ZecHub, ECC or ZCG). Official site: thezecathon.com. It shows a $100,000 prize pool, five tracks and "thirty days to build"; submissions are "sealed until judging". Tracks, rules, schedule, prizes and the submission form are visible only after signing in (GitHub, Google or email; one account per project). /rules, /resources, /schedule and /faq return 404 to anonymous requests.
+- **Deadline: 2026-10-28, from a search summary of a social post (x.com/zksnarks_/status/2104606505177899314) that returned HTTP 402 and could not be opened; a third-party project repository repeats the same date.** Time zone not stated. Treat as unconfirmed but urgent.
+- Tracks (same unconfirmed source): Shielded Payments, Private Markets, Cross-Chain, Core & Tooling, Wildcard; $15k per track, $5k Community Choice, $20k grand prize.
+- **Not found (behind login):** judging criteria, licence/open-source requirement, whether a deployed demo or video is required. Mummer's README and docs do not claim any of these.
+- Not to be confused with the ZecHub Hackathon (zechub.wiki/hackathon): a different event whose voting closed in July 2026.
+
+### Zodl (wallet compatibility, gates R01/R02/R03)
+
+- ZODL (Zcash Open Development Lab) is the former ECC team; Zashi was renamed Zodl, same app, no seed migration (forklog.com report).
+- Platforms: iOS (App Store) and Android (Google Play, F-Droid, signed APKs on GitHub). **No Windows build was found**; a macOS Apple-silicon proof-of-concept DMG exists (poc-macos-dmg-test, mac-v1.0.1, 2026-08-25).
+- Android release **3.17.2 (build 3157), 2026-10-20** (a TLS-verification security fix); previous 3.17.0 on 2026-10-13. The iOS repository has tags but no GitHub releases, so the current App Store version is **not found**.
+- Android registers an intent filter for the `zcash:` scheme (VIEW, BROWSABLE) and parses ZIP 321 (address, amount, memo) from QR codes and URIs. A system-camera scan opening the app was fixed (issue 1865, closed 2025-05-13). Issue 1758 (open) asks for fuller `zcash:` link handling, so opening a link from a browser may be inconsistent.
+- **Known limitations that affect Mummer's design:**
+  - Android issue 2217 (open): a multi-payment URI shows only the first recipient but signs all of them. **Mummer only ever builds single-recipient URIs.**
+  - iOS PR 1849 (merged 2026-06-26): iOS refuses ("fails closed" on) multi-recipient requests and reads only the first payment. Same conclusion.
+  - iOS issue 1420 (open): characters such as `+` in memos are accepted when they should be rejected; Android issue 1678: a memo with `+` in standard base64 failed to parse (closed, consistent with the spec). **Mummer encodes memos as URL-safe base64 without padding (as ZIP 321 requires), so the memo never contains `+`, `/` or `=`** (covered by `packages/zcash/test`).
+  - iOS issue 1754 (open): a stale-proposal race when scanning a second request after a first.
+- Whether Zodl runs in a Windows Android emulator is **untested**. The Android source contains no Play Integrity, SafetyNet or hardware attestation checks (grep of main at 2026-10-25), which makes it plausible.
+- **Zodl compatibility is still not verified:** no Mummer QR has been opened in the real application.
+
+### Other tooling that could test ZIP 321 and shielded behaviour independently (distinct from Zodl compatibility)
+
+| Tool | State | Notes |
+|---|---|---|
+| ZIP 321 specification | Active | No formal test-vector set, only examples (which Mummer's tests use). Memo is base64url without padding, max 512 bytes; a memo on a transparent address makes the URI invalid; indexed parameters carry several payments |
+| `zip321` crate (librustzcash) | 0.10.0, 2026-10-21 | Reference-style parser; rejects Sprout. Would let a cross-implementation check be written (parse Mummer's URIs with the Rust parser) but needs a Rust toolchain, which is not installed here |
+| zcash-devtool | build from source, "do not use in production" | Testnet (`-n test`), `wallet pay` takes a ZIP 321 request |
+| zingolib / zingo-cli | 7.0.0, 2026-10-15 | Testnet and regtest; Windows build and raw URI parsing unverified |
+| Zkool | 6.35.0, 2026-10-25 | Has a Windows .exe, ZIP 321 handling in the send page; testnet unverified |
+| zebrad / zallet | 7.0.0 (2026-10-22) / 0.1.0-beta.3 | Node and wallet for regtest-style tests |
+
+None of these have been run. They would establish that *another independent parser* accepts Mummer's URIs, not that Zodl does.
+
+### Name and domain (gate R11)
+
+Public searches only; **this is not trademark clearance** and a real search of the USPTO, EUIPO and WIPO databases plus counsel would be needed.
+
+- No Zcash, crypto, wallet or Secret Santa product named Mummer was found on GitHub search, the iOS App Store (only "Zany Mummer") or package registries. The npm name `mummer` was unpublished in 2015; `mummer` is free on PyPI and crates.io at the time of reading.
+- **MUMmer** is a well-known bioinformatics genome-alignment tool (MUMmer4); it dominates search results for the name, in an unrelated field.
+- Nearby marks reported by Justia (search summary): MUMMER-ABLE (live band performances, US reg. 3520299) and two SUMMER MUMMERS applications. No standalone MUMMER mark was found, but the USPTO search itself could not be used.
+- RDAP (not authoritative): mummer.com is registered (expires 2027-05-06) and redirects to a for-sale page; mummer.org is registered (2024-12-01); mummer.io, .xyz and .net looked unregistered; mummer.app was inconclusive. Nothing was bought.
+- "Mummer" is also an ordinary English word (mummers' plays and parades), which may make it a weak, descriptive-leaning mark.
