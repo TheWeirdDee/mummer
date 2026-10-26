@@ -307,7 +307,11 @@ describe('public endpoints', () => {
   it('parseUsdPrice extracts an exact decimal and rejects junk', () => {
     expect(parseUsdPrice('{"zcash":{"usd":31.54}}')).toBe('31.54000000');
     expect(parseUsdPrice('{"zcash": {"usd": 1234}}')).toBe('1234.00000000');
-    expect(parseUsdPrice('{"zcash":{"usd":0.123456789123}}')).toBe('0.12345678');
+    expect(parseUsdPrice('{"zcash":{"usd":1.123456789123}}')).toBe('1.12345678');
+    // Sanity bounds: an absurd upstream value must not become an absurd payment amount.
+    expect(parseUsdPrice('{"zcash":{"usd":0.5}}')).toBeUndefined();
+    expect(parseUsdPrice('{"zcash":{"usd":10001}}')).toBeUndefined();
+    expect(parseUsdPrice('{"zcash":{"usd":10000}}')).toBe('10000.00000000');
     expect(parseUsdPrice('{"zcash":{"usd":0}}')).toBeUndefined();
     expect(parseUsdPrice('{"zcash":{"usd":"31.5"}}')).toBeUndefined();
     expect(parseUsdPrice('{"zcash":{"usd":1e3}}')).toBeUndefined();
