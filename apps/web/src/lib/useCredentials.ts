@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { loadCrypto } from './cryptoClient';
+import { probeToken } from './credentialRecovery';
 import { loadCredentials, saveCredentials, stripFragment, type StoredCredentials } from './session';
 
 export type CredentialState =
@@ -7,7 +8,7 @@ export type CredentialState =
   | { status: 'missing' }
   | { status: 'badlink' }
   | { status: 'conflict'; incoming: StoredCredentials; stored: StoredCredentials }
-  | { status: 'ready'; creds: StoredCredentials; publicKey: string; fromLink: boolean; persisted: boolean };
+  | { status: 'ready'; creds: StoredCredentials; publicKey: string; fromLink: boolean; persisted: boolean; /** The link that was opened has been replaced; the key saved on this device still works. */ staleLink?: boolean };
 
 /**
  * Resolve this page's credentials: the private link's fragment first (then saved
@@ -34,6 +35,7 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
       let creds: StoredCredentials | undefined;
       let fromLink = false;
       let persisted = false;
+      let staleLink = false;
 
       if (hash && hash.length > 1) {
         const parsed = crypto.parseFragment(hash);
@@ -44,13 +46,30 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
         creds = { v: 1, role, groupId, ...(memberId ? { memberId } : {}), secretKey: crypto.encodeKey(parsed.secretKey), token: parsed.token };
         // A link that differs from what this device already saved must not silently overwrite it: ask first.
         const existing = loadCredentials(role, groupId);
-        if (existing && (existing.secretKey !== creds.secretKey || existing.token !== creds.token)) {
+        let differs = !!existing && (existing.secretKey !== creds.secretKey || existing.token !== creds.token);
+        if (differs && existing) {
+          // Ask the server which of the two still works. Only when BOTH do (or we can't tell) is it a real choice.
+          const [incoming, stored] = await Promise.all([probeToken(groupId, creds.token), probeToken(groupId, existing.token)]);
+          if (cancelled) return;
+          if (incoming === 'rejected' && stored === 'ok') {
+            creds = existing;
+            staleLink = true;
+            stripFragment();
+            differs = false;
+            persisted = true;
+          } else if (incoming === 'ok' && stored === 'rejected') {
+            differs = false; // the saved key is dead and the link is live: use the link
+          }
+        }
+        if (differs && existing) {
           if (!cancelled) setState({ status: 'conflict', incoming: creds, stored: existing });
           return;
         }
-        fromLink = true;
-        persisted = saveCredentials(creds);
-        if (persisted) stripFragment();
+        if (!staleLink) {
+          fromLink = true;
+          persisted = saveCredentials(creds);
+          if (persisted) stripFragment();
+        }
       } else {
         const stored = loadCredentials(role, groupId);
         if (stored && (role === 'admin' || stored.memberId === memberId)) {
@@ -65,7 +84,7 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
       }
       try {
         const pk = crypto.encodeKey(crypto.publicKeyFromSecret(crypto.decodeKey(creds.secretKey)));
-        setState({ status: 'ready', creds, publicKey: pk, fromLink, persisted });
+        setState({ status: 'ready', creds, publicKey: pk, fromLink, persisted, ...(staleLink ? { staleLink } : {}) });
       } catch {
         setState({ status: 'badlink' });
       }
