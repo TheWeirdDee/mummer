@@ -161,7 +161,7 @@ describe('request schemas', () => {
   });
 
   it('join: counts display-name length in code points, not UTF-16 units', () => {
-    const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(100) };
+    const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(100), addressCommitment: hash };
     expect(joinBody.safeParse({ ...base, pseudonym: '🎅🎅' }).success).toBe(true);
     expect(joinBody.safeParse({ ...base, pseudonym: '🎅' }).success).toBe(false);
     expect(joinBody.safeParse({ ...base, pseudonym: 'a'.repeat(33) }).success).toBe(false);
@@ -172,10 +172,11 @@ describe('request schemas', () => {
   it('draw: requires at least 4 bundles and commitments, rejects extra fields', () => {
     const b = (n: number) => Array.from({ length: n }, (_, i) => ({ memberId: String(i).repeat(32).slice(0, 32).replace(/[^0-9a-f]/g, 'a'), sealedBundle: 'y'.repeat(60) }));
     const c = (n: number) => Array.from({ length: n }, (_, i) => ({ memberId: String(i).repeat(32).slice(0, 32).replace(/[^0-9a-f]/g, 'a'), commitment: hash }));
-    expect(drawBody.safeParse({ drawVersion: 1, bundles: b(4), commitments: c(4) }).success).toBe(true);
-    expect(drawBody.safeParse({ drawVersion: 1, bundles: b(3), commitments: c(4) }).success).toBe(false);
-    expect(drawBody.safeParse({ drawVersion: 0, bundles: b(4), commitments: c(4) }).success).toBe(false);
-    expect(drawBody.safeParse({ drawVersion: 1, bundles: b(4), commitments: c(4), pairs: [] }).success).toBe(false);
+    expect(drawBody.safeParse({ drawVersion: 1, membersVersion: 3, bundles: b(4), commitments: c(4) }).success).toBe(true);
+    expect(drawBody.safeParse({ drawVersion: 1, membersVersion: 3, bundles: b(3), commitments: c(4) }).success).toBe(false);
+    expect(drawBody.safeParse({ drawVersion: 0, membersVersion: 3, bundles: b(4), commitments: c(4) }).success).toBe(false);
+    expect(drawBody.safeParse({ drawVersion: 1, membersVersion: 3, bundles: b(4), commitments: c(4), pairs: [] }).success).toBe(false);
+    expect(drawBody.safeParse({ drawVersion: 1, bundles: b(4), commitments: c(4) }).success).toBe(false); // the member-list version is required
   });
 
   it('ack: a reference only accompanies a receipt', () => {
@@ -209,5 +210,31 @@ describe('sealed payload schemas', () => {
     expect(bundlePlain.safeParse(ok).success).toBe(true);
     expect(bundlePlain.safeParse({ ...ok, extra: 1 }).success).toBe(false);
     expect(bundlePlain.safeParse({ ...ok, budgetCents: 1 }).success).toBe(false);
+  });
+});
+
+describe('look-alike and invisible characters are refused in names, wishlists and memo notes', () => {
+  const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(100), addressCommitment: hash };
+  const joined = (pseudonym: string) => joinBody.safeParse({ ...base, pseudonym }).success;
+
+  it.each([
+    ['right-to-left override', 'Ada' + String.fromCharCode(0x202e) + 'xyz'],
+    ['zero-width space', 'Ad' + String.fromCharCode(0x200b) + 'a'],
+    ['zero-width joiner', 'Ad' + String.fromCharCode(0x200d) + 'a'],
+    ['byte-order mark', 'Ad' + String.fromCharCode(0xfeff) + 'a'],
+    ['isolate control', 'Ada' + String.fromCharCode(0x2066) + 'x'],
+    ['word joiner', 'Ad' + String.fromCharCode(0x2060) + 'a'],
+  ])('rejects a nickname with a %s', (_n, name) => {
+    expect(joined(name)).toBe(false);
+  });
+
+  it('still accepts ordinary international names and emoji', () => {
+    for (const name of ['Zoë', '李雷', 'Åsa', '🎅🎄', 'O’Brien']) expect(joined(name)).toBe(true);
+  });
+
+  it('applies to wishlists as well', () => {
+    const profile = { v: 1, kind: 'profile', groupId: id, pseudonym: 'Ada', address: 'u1' + 'q'.repeat(40) };
+    expect(profilePlain.safeParse({ ...profile, wishlist: 'socks' + String.fromCharCode(0x202e) + 'books' }).success).toBe(false);
+    expect(profilePlain.safeParse({ ...profile, wishlist: 'socks\nbooks 🎁' }).success).toBe(true);
   });
 });
