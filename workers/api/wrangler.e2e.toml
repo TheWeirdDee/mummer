@@ -1,0 +1,24 @@
+# End-to-end test configuration (Playwright). Never deploy with this file.
+# Same assets and database shape as production, but a test entry point with a controllable clock
+# and ENVIRONMENT=development (human check not required, no Turnstile secret configured).
+
+name = "mummer-e2e"
+main = "e2e/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "../../apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mummer"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+ENVIRONMENT = "development"
+BUILD_COMMIT = "e2e"
+RATE_LIMIT_SALT = "e2e-salt"
