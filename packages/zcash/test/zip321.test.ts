@@ -196,3 +196,25 @@ describe('exact money arithmetic', () => {
     expect(() => usdCentsToZat(1000, 'NaN')).toThrow(AmountError);
   });
 });
+
+describe('ZIP 321 parameter names are ABNF literals, so they are case-insensitive', () => {
+  it('reads AMOUNT, Memo and Label regardless of case', () => {
+    const p = parsePaymentRequest(`zcash:${SAPLING_T}?AMOUNT=2&Memo=VGVzdA&LABEL=Hi`);
+    expect(p[0]!.amountZat).toBe(200_000_000n);
+    expect(new TextDecoder().decode(p[0]!.memo)).toBe('Test');
+    expect(p[0]!.label).toBe('Hi');
+  });
+  it('rejects an unknown REQ- parameter in any case, and duplicates across cases', () => {
+    expect(() => parsePaymentRequest(`zcash:${SAPLING_T}?amount=1&REQ-future=1`)).toThrow(Zip321Error);
+    expect(() => parsePaymentRequest(`zcash:${SAPLING_T}?amount=1&Amount=2`)).toThrow(Zip321Error);
+  });
+});
+
+describe('memo notes refuse invisible and direction-changing characters', () => {
+  it('rejects a bidi override and a zero-width space in a note', () => {
+    for (const cp of [0x202e, 0x200b, 0x2066, 0xfeff]) {
+      expect(() => buildGiftMemo({ reference: REF, note: 'hi' + String.fromCharCode(cp) + 'there' })).toThrow(MemoError);
+    }
+    expect(() => buildGiftMemo({ reference: REF, note: 'hello 🎁 café' })).not.toThrow();
+  });
+});
