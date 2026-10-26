@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Miniflare } from 'miniflare';
 import { runDraw } from '@mummer/draw';
 import {
+  addressCommitment,
   buildDrawPayload,
   encodeKey,
   generateId,
@@ -188,7 +189,7 @@ export async function joinMember(c: Client, host: Host, hostKeyB64: string, name
   const address = testAddress(i);
   const wishlist = `${name} wants socks #${i}`;
   const sealedProfile = sealProfile({ v: 1, kind: 'profile', groupId: host.groupId, pseudonym: name, wishlist, address }, hostKeyB64);
-  const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: name, publicKey: encodeKey(keys.publicKey), tokenHash: hashToken(token), sealedProfile, ...extra });
+  const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: name, publicKey: encodeKey(keys.publicKey), tokenHash: hashToken(token), sealedProfile, addressCommitment: addressCommitment(host.groupId, name, address), ...extra });
   if (r.status !== 201 && r.status !== 200) throw new Error(`join failed: ${r.status} ${JSON.stringify(r.body)}`);
   return { name, id: r.body.memberId, keys, token, address, wishlist };
 }
@@ -210,7 +211,7 @@ export async function drawGroup(
   c: Client,
   host: Host,
   members: Participant[],
-  opts: { key?: string; version?: number; closeEarly?: boolean; exclusions?: { giver: string; recipient: string }[] } = {},
+  opts: { key?: string; version?: number; closeEarly?: boolean; exclusions?: { giver: string; recipient: string }[]; /** Runs after the host's browser has read and sealed everything, just before it posts the draw. */ beforePost?: () => Promise<void> } = {},
 ) {
   const prof = await c.get(`/api/groups/${host.groupId}/profiles`, host.token);
   if (prof.status !== 200) throw new Error(`profiles failed: ${prof.status} ${JSON.stringify(prof.body)}`);
@@ -226,7 +227,8 @@ export async function drawGroup(
   const version = opts.version ?? group.body.group.drawVersion + 1;
   const payload = buildDrawPayload({ groupId: host.groupId, drawVersion: version, budgetCents: 2500, members: opened, assignments: draw.assignments });
   const key = opts.key ?? generateToken().slice(0, 32);
-  const res = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: version, closeEarly: opts.closeEarly ?? true, ...payload }, host.token, { 'idempotency-key': key });
+  await opts.beforePost?.();
+  const res = await c.post(`/api/groups/${host.groupId}/draw`, { drawVersion: version, membersVersion: prof.body.membersVersion, closeEarly: opts.closeEarly ?? true, ...payload }, host.token, { 'idempotency-key': key });
   return { res, assignments: draw.assignments, payload, key, version };
 }
 
