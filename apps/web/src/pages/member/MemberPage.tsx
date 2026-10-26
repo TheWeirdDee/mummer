@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { hasDraw, LIMITS, type GroupState, type GroupView } from '@mummer/shared';
 import { LinkSaver } from '../../components/LinkSaver';
@@ -7,7 +7,8 @@ import { Badge, Button, Disclosure, Notice, ProgressBar, SkeletonLines } from '.
 import { api, ApiError } from '../../lib/api';
 import { addressPreview, formatCalendarDate, formatInstant, formatUsd, plural, untilLabel } from '../../lib/format';
 import { useAsync, usePageMeta, usePolling } from '../../lib/hooks';
-import { isLinkSaved, type StoredCredentials } from '../../lib/session';
+import { CredentialConflict } from '../../components/CredentialConflict';
+import { clearRotation, isLinkSaved, loadRotation, saveCredentials, type StoredCredentials } from '../../lib/session';
 import { useCredentials } from '../../lib/useCredentials';
 import { Account } from './Account';
 import { Payment } from './Payment';
@@ -18,13 +19,20 @@ import { useAssignment } from './useAssignment';
 export function MemberPage() {
   const { gid = '', mid = '' } = useParams();
   usePageMeta('Your exchange | Mummer', 'Your private page in a Mummer exchange: your assignment, payment details and confirmations.', { index: false });
-  const { state, reload } = useCredentials('member', gid, mid);
+  const { state, reload, resolveConflict } = useCredentials('member', gid, mid);
 
   if (state.status === 'loading') {
     return (
       <PageContainer>
         <h1 className="sr-only">Loading</h1>
         <SkeletonLines lines={6} />
+      </PageContainer>
+    );
+  }
+  if (state.status === 'conflict') {
+    return (
+      <PageContainer narrow>
+        <CredentialConflict what="member" onChoose={resolveConflict} />
       </PageContainer>
     );
   }
@@ -40,7 +48,7 @@ export function MemberPage() {
           </p>
         </Notice>
         <div className="btn-row">
-          <Link to="/recover" className="btn btn--primary">I have a backup</Link>
+          <Link to="/recover" className="btn btn--primary">Restore from a backup or link</Link>
           <Link to={`/g/${gid}`} className="btn btn--secondary">Join again (before the draw)</Link>
         </div>
       </PageContainer>
@@ -67,6 +75,22 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
   const assignment = useAssignment(gid, mid, creds, drawn && (view?.me?.status ?? '') === 'assigned', view?.group.drawVersion ?? 0);
   const [saved, setSaved] = useState(isLinkSaved('member', gid));
   const [replaced, setReplaced] = useState(false);
+  // If a link replacement's answer was lost and the old token no longer works, adopt the new credentials saved before the request.
+  const groupError = group.error as ApiError | undefined;
+  useEffect(() => {
+    if (!groupError || groupError.status !== 401) return;
+    const pending = loadRotation(gid);
+    if (!pending || pending.token === creds.token) return;
+    api.group(gid, pending.token).then(
+      () => {
+        saveCredentials(pending);
+        clearRotation(gid);
+        reloadCreds();
+      },
+      () => clearRotation(gid),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupError]);
   const [tab, setTab] = useState<'gift' | 'receive' | 'account'>('gift');
   useAppChrome({ title: view?.group.title, role: view?.me?.pseudonym });
   const onReplaced = () => {
@@ -98,7 +122,7 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
         </Notice>
         <div className="btn-row">
           {status !== 401 && <Button onClick={group.reload}>Try again</Button>}
-          <Link to="/recover" className="btn btn--secondary">I have a backup</Link>
+          <Link to="/recover" className="btn btn--secondary">Restore from a backup or link</Link>
         </div>
       </PageContainer>
     );
@@ -219,6 +243,8 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
                     drawVersion={assignment.state.drawVersion}
                     alreadyReportedSent={me.senderState === 'user_reports_sent'}
                     closed={closed}
+                    roster={view.roster}
+                    groupBudgetCents={g.budgetCents}
                     onReported={group.reload}
                   />
                 </>
@@ -243,8 +269,8 @@ function Home({ gid, mid, creds, persisted, reloadCreds }: { gid: string; mid: s
           <section className="card" style={{ marginTop: 'var(--space-5)' }} aria-labelledby="prog-title">
             <h2 id="prog-title" style={{ fontSize: 'var(--fs-4)' }}>How the group is doing</h2>
             <div className="stack">
-              <ProgressBar value={view.progress.reportedSent} max={Math.max(view.progress.assigned, 1)} label={<><span>Givers who say they sent</span><span>{view.progress.reportedSent} / {view.progress.assigned}</span></>} />
-              <ProgressBar value={view.progress.acknowledged} max={Math.max(view.progress.assigned, 1)} label={<><span>Gifts confirmed by recipients</span><span>{view.progress.acknowledged} / {view.progress.assigned}</span></>} />
+              <ProgressBar ariaLabel="Givers who say they sent" value={view.progress.reportedSent} max={Math.max(view.progress.assigned, 1)} label={<><span>Givers who say they sent</span><span>{view.progress.reportedSent} / {view.progress.assigned}</span></>} />
+              <ProgressBar ariaLabel="Recipients who say it arrived" value={view.progress.acknowledged} max={Math.max(view.progress.assigned, 1)} label={<><span>Recipients who say it arrived</span><span>{view.progress.acknowledged} / {view.progress.assigned}</span></>} />
             </div>
             <p className="muted" style={{ marginTop: 'var(--space-3)', fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)' }}>
               Counts only: nobody can see who has sent or confirmed. Both are people&rsquo;s own reports, not proof of payment.
@@ -282,7 +308,7 @@ function WaitingRoom({ view }: { view: GroupView }) {
       <h2 id="wait-title" style={{ fontSize: 'var(--fs-4)' }}>You&rsquo;re in. Waiting for the draw.</h2>
       <p>
         {g.state === 'open'
-          ? `Joining stays open until ${formatInstant(g.joinClosesAt, g.timezone)} (${untilLabel(g.joinClosesAt)}). When the host draws the names, this page updates and shows who you’re giving to.`
+          ? `Joining stays open until ${formatInstant(g.joinClosesAt, g.timezone)} (${untilLabel(g.joinClosesAt)}). When the host draws the names, this page updates and shows who you’re giving to. If nothing happens for a while, ask the host. An exchange is deleted 30 days after its reveal date even if no draw is made.`
           : 'Joining is closed. When the host draws the names, this page updates and shows who you’re giving to.'}
       </p>
       <p className="muted">{plural(people.length, 'person', 'people')} so far (cap {g.memberCap}, at least {LIMITS.minMembersToDraw} needed to draw).</p>
