@@ -22,6 +22,7 @@ function hasForbiddenCharacter(s: string): boolean {
   for (const ch of s) {
     const c = ch.codePointAt(0)!;
     if ((c < 0x20 && c !== 0x0a) || c === 0x7f || c === 0x2028 || c === 0x2029) return true;
+    if ((c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2060 && c <= 0x2064) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff) return true;
   }
   return false;
 }
