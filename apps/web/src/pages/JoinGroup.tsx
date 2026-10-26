@@ -17,7 +17,6 @@ interface Draft {
   name: string;
   wishlist: string;
   wallet?: 'have' | 'find' | 'none';
-  address: string;
 }
 interface KeyDraft {
   secretKey: string;
@@ -103,7 +102,8 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
   const [name, setName] = useState(draft?.name ?? '');
   const [wishlist, setWishlist] = useState(draft?.wishlist ?? '');
   const [wallet, setWallet] = useState<Draft['wallet']>(draft?.wallet);
-  const [address, setAddress] = useState(draft?.address ?? '');
+  // The address is deliberately NOT restored from the draft: it is never written to browser storage.
+  const [address, setAddress] = useState('');
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<{ id: string; message: string }[]>([]);
   const [formError, setFormError] = useState('');
@@ -112,10 +112,20 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
   const [human, setHuman] = useState<HumanCheckState>({ required: false, ticket: null, ready: false });
   const [humanKey, setHumanKey] = useState(0);
   const [joined, setJoined] = useState<StoredCredentials>();
+  // The host's invite link carries the host's public key after the #. If the server later served a different key
+  // (for example a tampered one), joining would seal everything to someone else: compare them.
+  const readLinkKey = () => /(?:^#|&)hk=([A-Za-z0-9_-]{43})(?:&|$)/.exec(window.location.hash)?.[1];
+  const [linkKey, setLinkKey] = useState(readLinkKey);
+  useEffect(() => {
+    const onHash = () => setLinkKey(readLinkKey());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const hostKeyState: 'match' | 'mismatch' | 'absent' = !linkKey ? 'absent' : linkKey === invite.hostPublicKey ? 'match' : 'mismatch';
 
   useEffect(() => {
-    saveDraft(`join:${gid}`, { name, wishlist, wallet, address } satisfies Draft);
-  }, [gid, name, wishlist, wallet, address]);
+    saveDraft(`join:${gid}`, { name, wishlist, wallet } satisfies Draft);
+  }, [gid, name, wishlist, wallet]);
   useEffect(() => {
     api.config().then(setConfig, () => undefined);
   }, []);
@@ -169,6 +179,7 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
       else if (result && !result.ok) out.push({ id: 'j-address', message: result.message });
     }
     if (s === 3) {
+      if (hostKeyState === 'mismatch') out.push({ id: 'j-consent', message: 'This invitation does not match the host’s key. Do not join.' });
       if (!consent) out.push({ id: 'j-consent', message: 'Please confirm you understand who can see your details.' });
       if (human.required && !human.ready) out.push({ id: 'j-human', message: 'Complete the human check first.' });
     }
@@ -197,6 +208,8 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
         publicKey: pub,
         tokenHash: c.hashToken(keys.token),
         sealedProfile,
+        // Fingerprint of the address as registered: whoever draws me can't swap in a different one without it showing.
+        addressCommitment: c.addressCommitment(gid, name.trim().normalize('NFC'), result.address),
         ...(human.ticket ? { humanTicket: human.ticket } : {}),
       });
       const creds: StoredCredentials = { v: 1, role: 'member', groupId: gid, memberId: res.memberId, secretKey: keys.secretKey, token: keys.token };
@@ -238,11 +251,21 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
           </ol>
           <p>You&rsquo;ll need a Zcash wallet with a shielded address. If you don&rsquo;t have one yet, the next steps help.</p>
         </div>
+        {hostKeyState === 'mismatch' && (
+          <Notice tone="danger" title="Don’t join: this invitation doesn’t match the host’s key" live="assertive">
+            <p>The link you opened says one thing about the host’s key and Mummer’s server says another. That can mean the link was altered or the server was tampered with. Ask the host for a fresh invite link, ideally in person or over a channel you trust.</p>
+          </Notice>
+        )}
+        {hostKeyState === 'absent' && (
+          <Notice tone="info" title="This link has no host key to check">
+            <p>The host’s own invite link includes a fingerprint of their key, which lets your browser confirm the server hasn’t swapped it. This copy doesn’t include it. You can still join, but if you can, ask the host for the full link.</p>
+          </Notice>
+        )}
         <Notice tone="warn" title="What the host can see">
           <p>Your nickname, wishlist and address, because the host&rsquo;s browser runs the draw. The host&rsquo;s browser could also see who draws whom. Mummer&rsquo;s server cannot read your details or the pairings.</p>
         </Notice>
         <div className="btn-row">
-          <Button variant="primary" size="large" onClick={() => go(0)}>
+          <Button variant="primary" size="large" onClick={() => go(0)} disabled={hostKeyState === 'mismatch'}>
             Join this exchange
           </Button>
           <Link to="/privacy" className="btn btn--ghost" target="_blank" rel="noopener noreferrer">
@@ -301,7 +324,7 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
             {err('j-wallet') && <p className="error" role="alert">{err('j-wallet')}</p>}
           </div>
           {wallet && wallet !== 'have' && (
-            <Notice tone="info" title={wallet === 'none' ? 'Set one up first (about ten minutes)' : 'Here’s where to look'}>
+            <Notice tone="info" title={wallet === 'none' ? 'Set one up first' : 'Here’s where to look'}>
               <p>
                 {wallet === 'none' ? 'Install a wallet, back up its secret words on paper, and get a few dollars of ZEC.' : 'In your wallet, open Receive and copy the address it shows. It should start with u1 or zs1.'} The{' '}
                 <a href="/wallet-guide" target="_blank" rel="noopener noreferrer">wallet guide<span className="sr-only"> (opens in a new tab)</span></a> walks through it. Your answers here are saved in this tab, so you can come back.
@@ -328,9 +351,7 @@ function Wizard({ gid, invite }: { gid: string; invite: Invite }) {
             {result?.ok && (
               <Notice tone="success" title="This looks like a valid shielded address">
                 <p>
-                  {result.kind === 'unified' ? 'Unified address' : 'Sapling address'}
-                  {result.hasOrchard ? ' with an Orchard receiver' : ''}
-                  {result.hasSapling && result.kind === 'unified' ? ' and a Sapling receiver' : ''}. It ends in <code>{addressTail(result.address)}</code>. Check that matches your wallet.
+                  It ends in <code>{addressTail(result.address)}</code>. Check that matches the address in your wallet.
                 </p>
                 {result.warnings.includes('contains_transparent_receiver') && (
                   <p>
