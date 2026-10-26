@@ -28,10 +28,4 @@ export function wipe(...buffers: (Uint8Array | undefined)[]): void {
   }
 }
 
-/** CSPRNG bytes. */
-export function randomBytes(n: number): Uint8Array {
-  if (!Number.isInteger(n) || n < 1 || n > 1024) throw new RangeError('randomBytes: n must be 1..1024');
-  const out = new Uint8Array(n);
-  (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(out);
-  return out;
-}
+export { randomBytes } from './random.js';
