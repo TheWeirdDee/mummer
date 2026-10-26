@@ -207,10 +207,10 @@ export function Payment({
       <section className="card card--tint card--flat" aria-labelledby="check-title">
         <h3 id="check-title" style={{ fontSize: 'var(--fs-3)' }}>Before you approve in your wallet</h3>
         <ul className="checklist">
-          <li>The address matches the one above (check the first and last characters).</li>
-          <li>The amount matches, and it&rsquo;s a <strong>shielded</strong> payment.</li>
-          <li>The memo starts with <code>MUMMER</code> and the reference.</li>
-          <li>You&rsquo;re on the main Zcash network, not a test network.</li>
+          <li><span>The address matches the one above (check the first and last characters).</span></li>
+          <li><span>The amount matches, and it&rsquo;s a <strong>shielded</strong> payment.</span></li>
+          <li><span>The memo starts with <code>MUMMER</code> and the reference.</span></li>
+          <li><span>You&rsquo;re on the main Zcash network, not a test network.</span></li>
         </ul>
         <p className="muted" style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)', marginBottom: 0 }}>
           Mummer can&rsquo;t send anything for you. Your wallet signs and sends. If a wallet shows something different from this page, don&rsquo;t send.
