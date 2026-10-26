@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { base16 } from '@scure/base';
-import { generateId, hashToken } from '@mummer/crypto';
+import { generateId, hashToken } from '@mummer/crypto/light';
 import {
   LIMITS,
   canTransitionGroup,
   createGroupBody,
   dayBucket,
   drawBody,
+  extendBody,
   hasDraw,
   joinClosesAt,
   revealEligible,
@@ -20,6 +21,7 @@ import {
 } from '@mummer/shared';
 import { authAdmin, authAdminOrMember, audit, bumpStat, loadGroup, type GroupRow, type MemberRow } from '../db.js';
 import { HttpError, type AppBindings, type Env } from '../env.js';
+import { isConstraintError } from '../keys.js';
 import { bearerToken, json, pathId, readBody } from '../http.js';
 import { hit } from '../ratelimit.js';
 import { consumeHumanTicket } from '../human.js';
@@ -126,7 +128,7 @@ groups.get('/:gid/invite', async (c) => {
 
 export async function buildGroupView(env: Env, now: Date, g: GroupRow, role: 'admin' | 'member', member?: MemberRow): Promise<GroupView> {
   const [roster, counts, acks, mine] = await Promise.all([
-    env.DB.prepare("SELECT id, pseudonym, status FROM members WHERE group_id = ?1 AND status IN ('ready', 'assigned', 'revoked') ORDER BY pseudonym_key").bind(g.id).all<{ id: string; pseudonym: string; status: string }>(),
+    env.DB.prepare("SELECT id, pseudonym, status, address_commitment AS addressCommitment FROM members WHERE group_id = ?1 AND status IN ('ready', 'assigned', 'revoked') ORDER BY pseudonym_key").bind(g.id).all<{ id: string; pseudonym: string; status: string; addressCommitment: string }>(),
     env.DB.prepare(
       `SELECT COALESCE(SUM(status IN ('ready', 'assigned')), 0) AS ready,
               COALESCE(SUM(status = 'assigned'), 0) AS assigned,
@@ -200,14 +202,17 @@ groups.get('/:gid/profiles', async (c) => {
   const deps = c.get('deps');
   const g = await authAdmin(c.env, deps, pathId(c, 'gid'), bearerToken(c));
   if (g.state !== 'open' && g.state !== 'locked') throw new HttpError(409, 'invalid_state', 'Profiles are only available before the draw');
-  const rows = await c.env.DB.prepare("SELECT id, pseudonym, public_key, sealed_profile FROM members WHERE group_id = ?1 AND status = 'ready' ORDER BY id").bind(g.id).all<{
+  const rows = await c.env.DB.prepare("SELECT id, pseudonym, public_key, sealed_profile, address_commitment FROM members WHERE group_id = ?1 AND status = 'ready' ORDER BY id").bind(g.id).all<{
     id: string;
     pseudonym: string;
     public_key: string;
     sealed_profile: string;
+    address_commitment: string;
   }>();
   return json(c, {
-    members: rows.results.map((r) => ({ memberId: r.id, pseudonym: r.pseudonym, publicKey: r.public_key, sealedProfile: r.sealed_profile })),
+    // The draw must present this version: if anyone joins, leaves or replaces their key in the meantime, it is refused.
+    membersVersion: g.members_version,
+    members: rows.results.map((r) => ({ memberId: r.id, pseudonym: r.pseudonym, publicKey: r.public_key, sealedProfile: r.sealed_profile, addressCommitment: r.address_commitment })),
   });
 });
 
@@ -226,6 +231,8 @@ groups.delete('/:gid/members/:mid', async (c) => {
 /* ---------- POST /api/groups/:gid/draw (host, atomic, idempotent) ---------- */
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,64}$/;
+/** 50 sealed bundles with long non-ASCII wishlists exceed the default cap, so the draw has its own. */
+const DRAW_BODY_BYTES = 256 * 1024;
 
 groups.post('/:gid/draw', async (c) => {
   const { env } = c;
@@ -233,7 +240,7 @@ groups.post('/:gid/draw', async (c) => {
   const g = await authAdmin(env, deps, pathId(c, 'gid'), bearerToken(c));
   const key = c.req.header('idempotency-key') ?? '';
   if (!IDEMPOTENCY_KEY.test(key)) throw new HttpError(400, 'bad_request', 'An Idempotency-Key header (16-64 URL-safe characters) is required');
-  const body = await readBody(c, drawBody);
+  const body = await readBody(c, drawBody, DRAW_BODY_BYTES);
 
   // Replay of a draw that already succeeded with this key: same answer, no second draw.
   if (g.draw_idempotency_key === key && hasDraw(g.state)) return json(c, { drawVersion: g.draw_version, replay: true });
@@ -245,6 +252,7 @@ groups.post('/:gid/draw', async (c) => {
     throw new HttpError(409, 'invalid_state', 'The join window is still open. Close it first, or confirm closing early.');
   }
   if (body.drawVersion !== g.draw_version + 1) throw new HttpError(409, 'draw_mismatch', 'The draw version is out of date. Reload and try again.');
+  if (body.membersVersion !== g.members_version) throw new HttpError(409, 'draw_mismatch', 'The people in this exchange changed while you were drawing. Reload and draw again.');
 
   const ready = await env.DB.prepare("SELECT id FROM members WHERE group_id = ?1 AND status = 'ready' ORDER BY id").bind(g.id).all<{ id: string }>();
   const readyIds = ready.results.map((r) => r.id);
@@ -265,12 +273,13 @@ groups.post('/:gid/draw', async (c) => {
   // Every statement after the first is conditional on the first having won: ?1 = group, ?2 = idempotency key, ?3 = new draw version.
   const won = `EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND draw_idempotency_key = ?2 AND draw_version = ?3 AND state = 'drawn')`;
   const statements: D1PreparedStatement[] = [
-    // Compare-and-swap: only the first writer wins, and only if the ready-member count is unchanged.
+    // Compare-and-swap: only the first writer wins, and only if the member list (and every member's public key) is
+    // exactly what the host's browser read: members_version moves on join, leave, removal and credential rotation.
     env.DB.prepare(
       `UPDATE groups SET state = 'drawn', draw_version = ?3, draw_idempotency_key = ?2
-       WHERE id = ?1 AND state IN ('open', 'locked') AND draw_version = ?4
+       WHERE id = ?1 AND state IN ('open', 'locked') AND draw_version = ?4 AND members_version = ?6
          AND (SELECT count(*) FROM members WHERE group_id = ?1 AND status = 'ready') = ?5`,
-    ).bind(g.id, key, version, g.draw_version, n),
+    ).bind(g.id, key, version, g.draw_version, n, body.membersVersion),
     env.DB.prepare(`UPDATE members SET status = 'assigned' WHERE group_id = ?1 AND status = 'ready' AND ${won}`).bind(g.id, key, version),
   ];
   // Each table is written in sorted member-id order, independently of the other and of the draw cycle.
@@ -285,22 +294,65 @@ groups.post('/:gid/draw', async (c) => {
       env.DB.prepare(`INSERT INTO ack_commitments (group_id, recipient_member_id, draw_version, commitment) SELECT ?1, ?4, ?3, ?5 WHERE ${won}`).bind(g.id, key, version, k.memberId, k.commitment),
     );
   }
-  statements.push(audit(env, deps, g.id, 'draw_committed', version));
+  statements.push(audit(env, deps, g.id, 'draw_committed', version, true));
+
+  const replayIfAlreadyDone = async (): Promise<Response | undefined> => {
+    const latest = await loadGroup(env, deps, g.id);
+    if (latest && latest.draw_idempotency_key === key && hasDraw(latest.state)) return json(c, { drawVersion: latest.draw_version, replay: true });
+    return undefined;
+  };
 
   let results: D1Result[];
   try {
     results = await env.DB.batch(statements);
-  } catch {
-    // A unique/FK violation rolls the whole batch back: nothing was written.
+  } catch (e) {
+    // A uniqueness or foreign-key violation rolls the whole batch back: nothing was written. A simultaneous duplicate of
+    // the same request lands here too; if the draw is in fact complete under this key, answer as a replay.
+    if (!isConstraintError(e)) throw e;
+    const replay = await replayIfAlreadyDone();
+    if (replay) return replay;
     throw new HttpError(409, 'draw_already_done', 'The draw could not be saved. Reload and try again.');
   }
   if (results[0]!.meta.changes !== 1) {
-    // Lost the race (or the member count changed): the other writer's state stands and nothing of ours was inserted.
-    const latest = await loadGroup(env, deps, g.id);
-    if (latest && latest.draw_idempotency_key === key && hasDraw(latest.state)) return json(c, { drawVersion: latest.draw_version, replay: true });
-    throw new HttpError(409, 'draw_already_done', 'Another draw was saved first, or the member list changed. Reload and try again.');
+    // Lost the race (or the member list changed): the other writer's state stands and nothing of ours was inserted.
+    const replay = await replayIfAlreadyDone();
+    if (replay) return replay;
+    throw new HttpError(409, 'draw_already_done', 'Another draw was saved first, or the people in this exchange changed. Reload and try again.');
   }
   return json(c, { drawVersion: version, replay: false }, 201);
+});
+
+/* ---------- POST /api/groups/:gid/extend (host): change the dates before the draw ---------- */
+
+groups.post('/:gid/extend', async (c) => {
+  const { env } = c;
+  const deps = c.get('deps');
+  const g = await authAdmin(env, deps, pathId(c, 'gid'), bearerToken(c));
+  const body = await readBody(c, extendBody);
+  if (g.state !== 'open' && g.state !== 'locked') throw new HttpError(409, 'invalid_state', 'Dates can only be changed before the names are drawn');
+  const now = deps.now();
+  const today = todayIn(g.timezone, now);
+  const bad = (field: string, msg: string) => new HttpError(422, 'validation_failed', `${field}: ${msg}`);
+  if (body.joinDeadline < today) throw bad('joinDeadline', 'The join deadline cannot be in the past');
+  if (daysBetween(today, body.joinDeadline) > LIMITS.joinDeadlineMaxDays) throw bad('joinDeadline', `The join deadline must be within ${LIMITS.joinDeadlineMaxDays} days`);
+  if (daysBetween(body.joinDeadline, body.revealDate) < LIMITS.revealMinGapDays) throw bad('revealDate', 'The reveal date must be at least a day after the join deadline');
+  if (daysBetween(today, body.revealDate) > LIMITS.revealMaxDays) throw bad('revealDate', `The reveal date must be within ${LIMITS.revealMaxDays} days`);
+
+  const closesAt = joinClosesAt(body.joinDeadline, g.timezone);
+  const revealAt = revealOpensAt(body.revealDate, g.timezone);
+  const expiresAt = new Date(revealAt.getTime() + LIMITS.retentionDaysAfterReveal * 86_400_000);
+  const results = await env.DB.batch([
+    // Extending the deadline reopens a group that had only been locked (by the host or by the old deadline).
+    env.DB.prepare(
+      `UPDATE groups SET join_deadline = ?2, reveal_date = ?3, join_closes_at = ?4, reveal_at = ?5, expires_at = ?6,
+         state = CASE WHEN state = 'locked' THEN 'open' ELSE state END
+       WHERE id = ?1 AND state IN ('open', 'locked')`,
+    ).bind(g.id, body.joinDeadline, body.revealDate, closesAt.toISOString(), revealAt.toISOString(), expiresAt.toISOString()),
+    audit(env, deps, g.id, 'dates_changed', 0, true),
+  ]);
+  if (results[0]!.meta.changes !== 1) throw new HttpError(409, 'invalid_state', 'Dates can only be changed before the names are drawn');
+  const fresh = await loadGroup(env, deps, g.id);
+  return json(c, { joinDeadline: body.joinDeadline, revealDate: body.revealDate, state: fresh?.state ?? 'open' });
 });
 
 /* ---------- POST /api/groups/:gid/transition (host) ---------- */
@@ -321,12 +373,12 @@ groups.post('/:gid/transition', async (c) => {
   switch (action) {
     case 'lock':
       if (!canTransitionGroup(g.state, 'locked') || g.state !== 'open') throw refuse();
-      await run([env.DB.prepare("UPDATE groups SET state = 'locked' WHERE id = ?1 AND state = 'open'").bind(g.id), audit(env, deps, g.id, 'group_locked')]);
+      await run([env.DB.prepare("UPDATE groups SET state = 'locked' WHERE id = ?1 AND state = 'open'").bind(g.id), audit(env, deps, g.id, 'group_locked', 0, true)]);
       break;
     case 'reopen':
       if (g.state !== 'locked') throw refuse();
       if (Date.parse(g.join_closes_at) <= now.getTime()) throw new HttpError(409, 'join_closed', 'The join deadline has passed');
-      await run([env.DB.prepare("UPDATE groups SET state = 'open' WHERE id = ?1 AND state = 'locked'").bind(g.id), audit(env, deps, g.id, 'group_reopened')]);
+      await run([env.DB.prepare("UPDATE groups SET state = 'open' WHERE id = ?1 AND state = 'locked'").bind(g.id), audit(env, deps, g.id, 'group_reopened', 0, true)]);
       break;
     case 'reset_draw':
       // Only valid before any payment activity (state 'drawn'); after that, resolution is manual.
@@ -337,20 +389,20 @@ groups.post('/:gid/transition', async (c) => {
         env.DB.prepare("DELETE FROM ack_commitments WHERE group_id = ?1 AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state = 'locked')").bind(g.id),
         env.DB.prepare("DELETE FROM reveals WHERE group_id = ?1 AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state = 'locked')").bind(g.id),
         env.DB.prepare("UPDATE members SET status = 'ready', sender_state = 'not_started' WHERE group_id = ?1 AND status = 'assigned' AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state = 'locked')").bind(g.id),
-        audit(env, deps, g.id, 'draw_reset', g.draw_version),
+        audit(env, deps, g.id, 'draw_reset', g.draw_version, true),
       ]);
       break;
     case 'flag_resolution':
       if (g.state !== 'drawn' && g.state !== 'active') throw refuse();
-      await run([env.DB.prepare("UPDATE groups SET state = 'needs_resolution' WHERE id = ?1 AND state IN ('drawn', 'active')").bind(g.id), audit(env, deps, g.id, 'resolution_flagged', g.draw_version)]);
+      await run([env.DB.prepare("UPDATE groups SET state = 'needs_resolution' WHERE id = ?1 AND state IN ('drawn', 'active')").bind(g.id), audit(env, deps, g.id, 'resolution_flagged', g.draw_version, true)]);
       break;
     case 'clear_resolution':
       if (g.state !== 'needs_resolution') throw refuse();
-      await run([env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'needs_resolution'").bind(g.id), audit(env, deps, g.id, 'resolution_cleared', g.draw_version)]);
+      await run([env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'needs_resolution'").bind(g.id), audit(env, deps, g.id, 'resolution_cleared', g.draw_version, true)]);
       break;
     case 'close':
       if (g.state === 'closed') throw refuse();
-      await run([env.DB.prepare("UPDATE groups SET state = 'closed' WHERE id = ?1 AND state != 'closed'").bind(g.id), audit(env, deps, g.id, 'group_closed', g.draw_version)]);
+      await run([env.DB.prepare("UPDATE groups SET state = 'closed' WHERE id = ?1 AND state != 'closed'").bind(g.id), audit(env, deps, g.id, 'group_closed', g.draw_version, true)]);
       break;
   }
   const fresh = await loadGroup(env, deps, g.id);
@@ -373,15 +425,17 @@ groups.get('/:gid/glassbox', async (c) => {
   const g = await authAdmin(env, c.get('deps'), pathId(c, 'gid'), bearerToken(c));
   const digest = (s: string) => base16.encode(sha256(new TextEncoder().encode(s))).slice(0, 8);
   const blob = (s: string) => ({ sealed: true as const, bytes: s.length, fingerprint: digest(s) });
-  const [members, assignments, commitments, reveals, events] = await Promise.all([
+  const [members, assignments, commitments, reveals, events, acks, sent] = await Promise.all([
     env.DB.prepare('SELECT * FROM members WHERE group_id = ?1 ORDER BY id').bind(g.id).all<MemberRow>(),
-    env.DB.prepare('SELECT * FROM assignments WHERE group_id = ?1').bind(g.id).all<{ giver_member_id: string; draw_version: number; sealed_bundle: string }>(),
-    env.DB.prepare('SELECT * FROM ack_commitments WHERE group_id = ?1').bind(g.id).all<{ recipient_member_id: string; draw_version: number; commitment: string; state: string; reference_matched: number; state_day: string | null }>(),
+    env.DB.prepare('SELECT giver_member_id, draw_version, sealed_bundle FROM assignments WHERE group_id = ?1').bind(g.id).all<{ giver_member_id: string; draw_version: number; sealed_bundle: string }>(),
+    env.DB.prepare('SELECT recipient_member_id, draw_version, commitment FROM ack_commitments WHERE group_id = ?1').bind(g.id).all<{ recipient_member_id: string; draw_version: number; commitment: string }>(),
     env.DB.prepare('SELECT * FROM reveals WHERE group_id = ?1').bind(g.id).all(),
     env.DB.prepare('SELECT type, day, version FROM audit_events WHERE group_id = ?1 ORDER BY id').bind(g.id).all(),
+    env.DB.prepare("SELECT COALESCE(SUM(state = 'recipient_acknowledged'), 0) AS acknowledged, COALESCE(SUM(state = 'disputed'), 0) AS disputed FROM ack_commitments WHERE group_id = ?1").bind(g.id).first<{ acknowledged: number; disputed: number }>(),
+    env.DB.prepare("SELECT COALESCE(SUM(sender_state = 'user_reports_sent'), 0) AS n FROM members WHERE group_id = ?1").bind(g.id).first<{ n: number }>(),
   ]);
   return json(c, {
-    note: 'A redacted view of every row the server holds for this group. Sealed values are shown as sizes and short fingerprints only.',
+    note: 'A redacted view of what the server holds for this group. Sealed values are shown as sizes and short fingerprints only. Per-person sent and confirmed states exist on the server but are deliberately not shown to you: only totals are.',
     groups: [
       {
         id: g.id,
@@ -396,6 +450,7 @@ groups.get('/:gid/glassbox', async (c) => {
         admin_token_hash: '(hash, not shown)',
         state: g.state,
         draw_version: g.draw_version,
+        members_version: g.members_version,
         created_day: g.created_day,
         expires_at: g.expires_at,
       },
@@ -405,20 +460,14 @@ groups.get('/:gid/glassbox', async (c) => {
       pseudonym: m.pseudonym,
       public_key: '(public key)',
       sealed_profile: blob(m.sealed_profile),
+      address_commitment: m.address_commitment ? `${m.address_commitment.slice(0, 8)}…` : '',
       token_hash: '(hash, not shown)',
       status: m.status,
-      sender_state: m.sender_state,
       joined_day: m.joined_day,
     })),
     assignments: assignments.results.map((a) => ({ giver_member_id: a.giver_member_id, draw_version: a.draw_version, sealed_bundle: blob(a.sealed_bundle) })),
-    ack_commitments: commitments.results.map((k) => ({
-      recipient_member_id: k.recipient_member_id,
-      draw_version: k.draw_version,
-      commitment: `${k.commitment.slice(0, 8)}…`,
-      state: k.state,
-      reference_matched: k.reference_matched,
-      state_day: k.state_day,
-    })),
+    ack_commitments: commitments.results.map((k) => ({ recipient_member_id: k.recipient_member_id, draw_version: k.draw_version, commitment: `${k.commitment.slice(0, 8)}…` })),
+    totals: { reportedSent: sent?.n ?? 0, acknowledged: acks?.acknowledged ?? 0, reportedProblem: acks?.disputed ?? 0 },
     reveals: reveals.results,
     audit_events: events.results,
     neverStored: ['wallet addresses in plain text', 'wishlists in plain text', 'memos or gift references in plain text', 'secret keys', 'seed phrases or viewing keys', 'IP addresses', 'which member is assigned to which (only after a consented reveal)'],
