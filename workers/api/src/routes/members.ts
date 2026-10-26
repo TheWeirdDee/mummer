@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { ackCommitment, generateId, hashToken, normalizeReference, timingSafeEqual } from '@mummer/crypto';
+import { ackCommitment, generateId, hashToken, normalizeReference, timingSafeEqual } from '@mummer/crypto/light';
 import {
   LIMITS,
   ackBody,
@@ -14,6 +14,7 @@ import {
 } from '@mummer/shared';
 import { authAdminOrMember, authMember, loadGroup, pseudonymKey, type GroupRow } from '../db.js';
 import { HttpError, type AppBindings, type Env } from '../env.js';
+import { isConstraintError, isUsableX25519PublicKey } from '../keys.js';
 import { bearerToken, json, pathId, readBody } from '../http.js';
 import { consumeHumanTicket } from '../human.js';
 import { hit, peek } from '../ratelimit.js';
@@ -27,6 +28,7 @@ members.post('/:gid/members', async (c) => {
   const deps = c.get('deps');
   const gid = pathId(c, 'gid');
   const body = await readBody(c, joinBody);
+  if (!isUsableX25519PublicKey(body.publicKey)) throw new HttpError(422, 'validation_failed', 'Your key could not be used. Reload the page and try again.');
   const g = await loadGroup(env, deps, gid);
   if (!g) throw new HttpError(404, 'not_found', 'This invitation was not found. It may have expired or been deleted.');
 
@@ -53,19 +55,22 @@ members.post('/:gid/members', async (c) => {
     results = await env.DB.batch([
       // Capacity and "still open" are enforced inside the INSERT so concurrent joins cannot exceed the cap.
       env.DB.prepare(
-        `INSERT INTO members (group_id, id, pseudonym, pseudonym_key, public_key, sealed_profile, token_hash, status, sender_state, joined_day)
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'ready', 'not_started', ?8
+        `INSERT INTO members (group_id, id, pseudonym, pseudonym_key, public_key, sealed_profile, token_hash, status, sender_state, joined_day, address_commitment)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'ready', 'not_started', ?8, ?10
          WHERE EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state = 'open' AND join_closes_at > ?9)
            AND (SELECT count(*) FROM members WHERE group_id = ?1 AND status IN ('ready', 'assigned'))
                < (SELECT member_cap FROM groups WHERE id = ?1)`,
-      ).bind(gid, id, body.pseudonym, key, body.publicKey, body.sealedProfile, body.tokenHash, day, deps.now().toISOString()),
+      ).bind(gid, id, body.pseudonym, key, body.publicKey, body.sealedProfile, body.tokenHash, day, deps.now().toISOString(), body.addressCommitment),
       env.DB.prepare(
         `INSERT INTO audit_events (group_id, type, day, version) SELECT ?1, 'member_joined', ?3, 0 WHERE EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2)`,
       ).bind(gid, id, day),
       env.DB.prepare(`UPDATE stats SET value = value + 1 WHERE key = 'members_joined' AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2)`).bind(gid, id),
+      // The member list changed: a draw that read the previous list must be refused.
+      env.DB.prepare(`UPDATE groups SET members_version = members_version + 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2)`).bind(gid, id),
     ]);
-  } catch {
-    // Lost a race on the unique pseudonym or token.
+  } catch (e) {
+    // Lost a race on the unique pseudonym or token. Anything else is a real fault and must not be disguised.
+    if (!isConstraintError(e)) throw e;
     const again = await env.DB.prepare('SELECT id FROM members WHERE group_id = ?1 AND token_hash = ?2').bind(gid, body.tokenHash).first<{ id: string }>();
     if (again) return json(c, { memberId: again.id }, 200);
     throw new HttpError(409, 'duplicate_pseudonym', 'Someone in this group already uses that name. Please choose another.');
@@ -96,6 +101,7 @@ export async function removeMember(env: Env, deps: { now(): Date }, g: GroupRow,
     await env.DB.batch([
       env.DB.prepare("DELETE FROM members WHERE group_id = ?1 AND id = ?2 AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state IN ('open', 'locked'))").bind(g.id, mid),
       env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, 0)').bind(g.id, 'member_removed', dayBucket(deps.now())),
+      env.DB.prepare("UPDATE groups SET members_version = members_version + 1 WHERE id = ?1 AND state IN ('open', 'locked')").bind(g.id),
     ]);
     return { exception: false };
   }
@@ -217,10 +223,11 @@ members.post('/:gid/members/:mid/rotate', async (c) => {
   const { group, member } = await authMember(env, deps, pathId(c, 'gid'), pathId(c, 'mid'), bearerToken(c));
   if (group.state === 'closed') throw new HttpError(409, 'invalid_state', 'This exchange is closed');
   const body = await readBody(c, rotateBody);
+  if (!isUsableX25519PublicKey(body.newPublicKey)) throw new HttpError(422, 'validation_failed', 'Your new key could not be used. Reload the page and try again.');
   const hasBundle = await env.DB.prepare('SELECT 1 AS x FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2').bind(group.id, member.id).first();
-  if (hasBundle && !body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'newSealedBundle: Your assignment must be re-sealed to your new key');
-  if (!hasBundle && body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'newSealedBundle: You have no assignment to re-seal');
-  if (body.newTokenHash === member.token_hash) throw new HttpError(422, 'validation_failed', 'newTokenHash: Choose a new token');
+  if (hasBundle && !body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'Your assignment must be re-sealed to your new key');
+  if (!hasBundle && body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'You have no assignment to re-seal');
+  if (body.newTokenHash === member.token_hash) throw new HttpError(422, 'validation_failed', 'Choose a different link');
 
   const stmts: D1PreparedStatement[] = [
     // Compare-and-swap on the current token hash: two concurrent rotations cannot both succeed.
@@ -231,10 +238,13 @@ members.post('/:gid/members/:mid/rotate', async (c) => {
       env.DB.prepare('UPDATE assignments SET sealed_bundle = ?3 WHERE group_id = ?1 AND giver_member_id = ?2 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND token_hash = ?4)').bind(group.id, member.id, body.newSealedBundle, body.newTokenHash),
     );
   }
+  // A new public key changes what a draw in progress would seal to: move the member-list version so that draw is refused.
+  stmts.push(env.DB.prepare('UPDATE groups SET members_version = members_version + 1 WHERE id = ?1').bind(group.id));
   let results: D1Result[];
   try {
     results = await env.DB.batch(stmts);
-  } catch {
+  } catch (e) {
+    if (!isConstraintError(e)) throw e;
     throw new HttpError(409, 'conflict', 'Those credentials are already in use. Generate new ones.');
   }
   if (results[0]!.meta.changes !== 1) throw new HttpError(409, 'conflict', 'Your credentials changed while rotating. Reload and try again.');
@@ -283,7 +293,8 @@ members.post('/:gid/reveals', async (c) => {
       env.DB.prepare('INSERT INTO reveals (group_id, giver_member_id, recipient_member_id, audience, declared_day) VALUES (?1, ?2, ?3, ?4, ?5)').bind(group.id, member.id, body.recipientId, body.audience, dayBucket(now)),
       env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, ?4)').bind(group.id, 'reveal_declared', dayBucket(now), group.draw_version),
     ]);
-  } catch {
+  } catch (e) {
+    if (!isConstraintError(e)) throw e;
     throw new HttpError(409, 'conflict', 'That gift has already been revealed.');
   }
   return json(c, { revealed: true, replay: false }, 201);
