@@ -65,6 +65,8 @@ async function request<T>(method: string, path: string, opts: Options = {}): Pro
 export interface PublicConfig {
   humanCheckRequired: boolean;
   turnstileSiteKey: string | null;
+  /** Origin of the separate human-check host. Null means no check can be shown. */
+  humanCheckOrigin: string | null;
   environment: string;
   commit: string;
 }
