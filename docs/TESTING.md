@@ -1,6 +1,6 @@
 # Testing
 
-Layered, and honest about what each layer does and does not prove. Counts below are from the last full runs recorded in `docs/EVIDENCE.md`: Vitest 361 tests in 16 files (all passing), Playwright 50 tests (all passing).
+Layered, and honest about what each layer does and does not prove. Counts below are from the final verification recorded in `docs/EVIDENCE.md`: Vitest 395 tests in 20 files (all passing); Playwright 74 tests in Chromium (73 in one command plus one re-run after the computer slept mid-test), with Firefox and WebKit run spec by spec.
 
 | Layer | Tool | Where | What it proves |
 |---|---|---|---|
@@ -17,6 +17,10 @@ Layered, and honest about what each layer does and does not prove. Counts below 
 | File | Count | Covers |
 |---|---|---|
 | `exchange.spec.ts` | 1 | A complete exchange with a host and five participants in isolated browser contexts: create, save link, join x5, draw, open assignments (QR, amount, memo), mark sent, confirm with reference, move the server clock, reveal, glass-box, delete; no console errors; no third-party origin |
+| `link-replacement.spec.ts` | 10 | Lost reply after a successful replacement, a refusal, a server error treated as ambiguous, a refresh, offline then online, repeated requests, two replacements in a row, another tab, a stale link opened on a device holding the new key, a removed member not let back in by a stale record |
+| `storage-failure.spec.ts` | 4 | Storage blocked entirely (open and restore), a replacement refused when the new key cannot be kept, a replacement whose new key cannot be saved afterwards (held in memory, reload recovers) |
+| `review-fixes.spec.ts` | 4 | Cleared dates, no payment request for a removed recipient, removal during draw review, reveal wording |
+| `metadata.spec.ts` | 6 | Titles and descriptions, absolute social images, icons and manifest, internal links and navigation, external link safety, footers, no placeholder text or nameless buttons |
 | `validation.spec.ts` | 12 | Create-form and join-wizard validation, every address refusal, duplicate nickname, drafts across reload, full / drawn / unknown invitations, the invite's host-key fingerprint (match, absent, wrong), API outage and retry, price outage, expired quote, oversize note |
 | `recovery.spec.ts` | 6 | Missing key, truncated link, a link carrying a different key than the saved one (asks, keeping works), passphrase backup restore and wrong passphrase, pasted-link restore, link replacement (old link dead, new link opens the same assignment), leaving and forgetting a device |
 | `browser-security.spec.ts` | 6 | CSP enforcement in a real browser, no secret in any URL, header, referrer, body or storage, headers on every document type, sandboxed human-check frame, no cookies or CORS |
@@ -37,7 +41,10 @@ Layered, and honest about what each layer does and does not prove. Counts below 
 ## Running
 
 ```bash
-npm run typecheck && npm test       # Vitest (16 files, 361 tests)
+npm run typecheck && npm test       # Vitest (20 files, 395 tests)
+npm run test:unit                   # package tests only (176)
+npm run test:crosscheck             # reference Rust ZIP 321 parser (needs Rust; opt-in)
+E2E_ALL_BROWSERS=1 npx playwright test --project=firefox   # or webkit; needs: npx playwright install firefox webkit
 npx playwright test                 # starts its own server on :8788, builds first
 npx playwright test tests/e2e/a11y.spec.ts
 ```
@@ -67,6 +74,35 @@ npx playwright test tests/e2e/a11y.spec.ts
 | An HTML entity inside a JS string rendered literally in the "received" notice | `exchange.spec.ts` (asserts the rendered sentence) |
 | Draw replays, stale member lists, forged curve points, oversize bodies | `workers/api/test/hardening.test.ts`, `extend.test.ts` |
 
-## Known test flake
+## Load-dependent failures and the guard against them
 
-In one of seven full Vitest runs, a single security test (`exclusions cannot be bypassed through the API`, which creates 26 exchanges in one test) received an HTTP 500 from a member-join request. It passed alone and in six further full runs, and with the error stack logged it did not recur, so the cause is **not identified**. It was a load-dependent `TypeError` inside the Worker under Miniflare. Treat it as an open item: if it recurs in CI, capture the stack (the server log intentionally records only the route and error name).
+A security test once got an HTTP 500 from a join request in one of seven full runs. Structured diagnostics (`describeError` in `workers/api/src/app.ts`: route with ids masked, error name, masked message, the underlying network cause, top stack frames; never bodies, headers, tokens or ids) then captured the failure under deliberate load as `TypeError: fetch failed` with cause `connect EADDRINUSE 127.0.0.1:<port>`. The harness reaches Miniflare's D1 over loopback; a full suite opens about 4,000 connections that each linger in TIME_WAIT for two minutes on Windows, whose dynamic range is 16,384 ports (13,933 were in use at the time). This affects the **test environment only**.
+
+`workers/api/test/resilient-d1.ts` retries a D1 call only when it failed to *connect* with EADDRINUSE or EADDRNOTAVAIL (nothing was sent, so a repeat cannot duplicate a write); anything else, including constraint errors and failures after sending, is thrown unchanged, and every retry is logged. `resilient-d1.test.ts` proves that other errors are never retried. Four consecutive full runs afterwards: 0 retries, 0 server errors.
+
+**Not claimed:** that the very first, undiagnosed occurrence was this cause (it is consistent with it), or that heavy parallelism is safe: three full suites at once still produce timeouts and `ECONNRESET` on this machine, which the guard intentionally does not retry.
+
+## Race tests
+
+`workers/api/test/interleave.ts` wraps the database binding so a competing request can complete exactly between a handler's checks and its write; `interleaving.test.ts` uses it for draw versus link replacement, redraw versus "sent" and acknowledgment, close versus acknowledgment, draw versus leave, and redraw versus reveal. Twelve of its 17 tests fail against the pre-fix server code.
+
+## Cross-implementation check
+
+`tests/crosscheck/zip321-rust.test.ts` (run with `npm run test:crosscheck`; needs a Rust toolchain; the helper crate is `tools/zip321-crosscheck`) feeds Mummer's payment requests to the reference `zip321` crate and compares address, amount and memo bytes, and checks that it rejects what Mummer rejects. It shows that an independent implementation of the specification accepts Mummer's output. It does not test any wallet.
+
+## Regression tests added after the 27 October review
+
+| Finding | Test that fails without the fix |
+|---|---|
+| Glass box exposed recipient-only reveals | `payments-reveal.test.ts` "glass box never exposes", `tests/security` "recipient-only reveals stay between the two people" |
+| Replacement raced the draw and could strand an assignment | `interleaving.test.ts` (replacement versus the draw, a stale bundle, a redraw in between) |
+| Delayed "sent", acknowledgment, reveal or confirm wrote into a newer draw or a closed exchange | `interleaving.test.ts` (payment writes, reveals) |
+| Storage failure during replacement could lose the new key | `storage-failure.spec.ts` |
+| A removed recipient's giver still saw a payment request | `review-fixes.spec.ts` |
+| Leaving during a draw reported a removal that did not happen | `interleaving.test.ts` "leaving versus the draw" |
+| Clearing a date threw instead of validating | `review-fixes.spec.ts` |
+| Recovery with storage blocked dropped the key | `storage-failure.spec.ts` |
+| `npm run test:unit` selected a nonexistent project | the script now runs (176 tests) |
+| Closed exchanges accepted reveal confirmations | `interleaving.test.ts` |
+| Reveal copy contradicted the listing | `review-fixes.spec.ts` |
+| Removing someone in draw review forced a stale-list retry | `review-fixes.spec.ts` |
