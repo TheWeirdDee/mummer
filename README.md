@@ -2,7 +2,7 @@
 
 **A privacy-focused, noncustodial Secret Santa where the gifts are small shielded Zcash payments sent from people's own wallets.**
 
-> **Status: not deployed.** There is no live URL yet. No push or deployment was made because no destination was designated. Everything below describes what runs locally and what the tests show. See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for what is and isn't verified.
+> **Status: not deployed.** There is no live URL yet: no Cloudflare destination has been designated. The source is on GitHub. Everything below describes what runs locally and what the tests show. See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for what is and isn't verified.
 
 ![Landing page, desktop](docs/screenshots/landing-desktop.png)
 
@@ -73,12 +73,14 @@ Full instructions (local Worker, database migrations, environment): [`docs/SETUP
 
 ```bash
 npm run typecheck
-npm test               # 361 Vitest tests: unit, API on a real D1 (Miniflare), security
+npm test               # 395 Vitest tests: unit, API on a real D1 (Miniflare), race tests, security
 npm run build
-npx playwright test    # 50 browser tests; starts its own server on :8788
+npx playwright test    # 74 browser tests in Chromium; starts its own server on :8788
+E2E_ALL_BROWSERS=1 npx playwright test --project=firefox   # or webkit (npx playwright install firefox webkit first)
+npm run test:crosscheck # optional: parse Mummer's payment requests with the reference Rust ZIP 321 parser
 ```
 
-What each layer proves, the test doubles in use and one open flake: [`docs/TESTING.md`](docs/TESTING.md). Run history and what was not run: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
+What each layer proves, the test doubles in use and the load-dependent test failure that was diagnosed: [`docs/TESTING.md`](docs/TESTING.md). Run history and what was not run: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 
 ## Deployment
 
