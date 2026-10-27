@@ -37,3 +37,5 @@ ENVIRONMENT = "production"
 # Public Turnstile site key (not secret). Set when the Turnstile widget is created.
 TURNSTILE_SITE_KEY = "0x4AAAAAAFoc3XDIit4EhqX_"
 BUILD_COMMIT = "unknown"
+# Origin of the separate human-check Worker (workers/human-check). Public. Required in production: without it the human check cannot be shown.
+HUMAN_CHECK_ORIGIN = "https://mummer-check.mummer-app.workers.dev"
