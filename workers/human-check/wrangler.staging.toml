@@ -1,0 +1,17 @@
+#:schema node_modules/wrangler/config-schema.json
+# Staging human-check host (see workers/api/wrangler.staging.toml). Same code as production, different name and parent.
+
+name = "mummer-staging-check"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+PARENT_ORIGIN = "https://mummer-staging.mummer-app.workers.dev"
+
+[observability]
+enabled = false
