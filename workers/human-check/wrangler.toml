@@ -1,0 +1,21 @@
+#:schema node_modules/wrangler/config-schema.json
+# The Cloudflare Turnstile host for Mummer. It is a separate Worker on its own origin on purpose: Turnstile cannot finish inside a
+# frame that has an opaque origin (a sandbox without allow-same-origin), and putting Cloudflare's script on the app's own pages would
+# let it see private-link fragments and keys. A separate origin gives Turnstile a real origin and still keeps it away from the app.
+# See docs/DEPLOYMENT.md and docs/DECISIONS.md D-37.
+
+name = "mummer-check"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+# The ONLY origin allowed to embed this page and the only one the token is posted to. No trailing slash.
+PARENT_ORIGIN = "https://mummer.mummer-app.workers.dev"
+
+[observability]
+enabled = false
