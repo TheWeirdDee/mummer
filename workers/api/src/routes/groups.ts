@@ -425,11 +425,14 @@ groups.get('/:gid/glassbox', async (c) => {
   const g = await authAdmin(env, c.get('deps'), pathId(c, 'gid'), bearerToken(c));
   const digest = (s: string) => base16.encode(sha256(new TextEncoder().encode(s))).slice(0, 8);
   const blob = (s: string) => ({ sealed: true as const, bytes: s.length, fingerprint: digest(s) });
-  const [members, assignments, commitments, reveals, events, acks, sent] = await Promise.all([
+  const [members, assignments, commitments, reveals, privateReveals, events, acks, sent] = await Promise.all([
     env.DB.prepare('SELECT * FROM members WHERE group_id = ?1 ORDER BY id').bind(g.id).all<MemberRow>(),
     env.DB.prepare('SELECT giver_member_id, draw_version, sealed_bundle FROM assignments WHERE group_id = ?1').bind(g.id).all<{ giver_member_id: string; draw_version: number; sealed_bundle: string }>(),
     env.DB.prepare('SELECT recipient_member_id, draw_version, commitment FROM ack_commitments WHERE group_id = ?1').bind(g.id).all<{ recipient_member_id: string; draw_version: number; commitment: string }>(),
-    env.DB.prepare('SELECT * FROM reveals WHERE group_id = ?1').bind(g.id).all(),
+    // Same visibility rule as GET /reveals for a host: only reveals the giver chose to show the whole group. A private
+    // ("recipient") reveal is between two people; the host sees that one exists, never who.
+    env.DB.prepare('SELECT giver_member_id, recipient_member_id, audience, declared_day, recipient_confirmed_day FROM reveals WHERE group_id = ?1 AND audience = ?2').bind(g.id, 'group').all(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM reveals WHERE group_id = ?1 AND audience = 'recipient'").bind(g.id).first<{ n: number }>(),
     env.DB.prepare('SELECT type, day, version FROM audit_events WHERE group_id = ?1 ORDER BY id').bind(g.id).all(),
     env.DB.prepare("SELECT COALESCE(SUM(state = 'recipient_acknowledged'), 0) AS acknowledged, COALESCE(SUM(state = 'disputed'), 0) AS disputed FROM ack_commitments WHERE group_id = ?1").bind(g.id).first<{ acknowledged: number; disputed: number }>(),
     env.DB.prepare("SELECT COALESCE(SUM(sender_state = 'user_reports_sent'), 0) AS n FROM members WHERE group_id = ?1").bind(g.id).first<{ n: number }>(),
@@ -469,6 +472,7 @@ groups.get('/:gid/glassbox', async (c) => {
     ack_commitments: commitments.results.map((k) => ({ recipient_member_id: k.recipient_member_id, draw_version: k.draw_version, commitment: `${k.commitment.slice(0, 8)}…` })),
     totals: { reportedSent: sent?.n ?? 0, acknowledged: acks?.acknowledged ?? 0, reportedProblem: acks?.disputed ?? 0 },
     reveals: reveals.results,
+    privateRevealCount: privateReveals?.n ?? 0,
     audit_events: events.results,
     neverStored: ['wallet addresses in plain text', 'wishlists in plain text', 'memos or gift references in plain text', 'secret keys', 'seed phrases or viewing keys', 'IP addresses', 'which member is assigned to which (only after a consented reveal)'],
   });
