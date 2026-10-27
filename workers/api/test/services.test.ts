@@ -114,4 +114,15 @@ describe('Turnstile verification', () => {
     stub({ success: true });
     expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
   });
+
+  it('the public Cloudflare test keys answer with a placeholder hostname and say so: that is accepted, and only that', async () => {
+    const e = env({ HUMAN_CHECK_ORIGIN: 'https://mummer-check.example.workers.dev' });
+    stub({ success: true, hostname: 'example.com', metadata: { result_with_testing_key: true } });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(true);
+    // The marker must be exactly true, and a failure is still a failure.
+    stub({ success: true, hostname: 'example.com', metadata: { result_with_testing_key: false } });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
+    stub({ success: false, hostname: 'example.com', metadata: { result_with_testing_key: true } });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
+  });
 });
