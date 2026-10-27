@@ -58,7 +58,10 @@ export function applySecurityHeaders(res: Response, pathname: string, secureTran
   headers.set('X-Frame-Options', isFrame ? 'SAMEORIGIN' : 'DENY');
   headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()');
   headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+  // The human-check frame is sandboxed (an opaque origin), so to the browser its own script is a cross-origin request and
+  // `same-origin` would block it (found on the first real deployment: ERR_BLOCKED_BY_RESPONSE.NotSameOrigin). That one file is
+  // public and holds no secret, so it alone is readable cross-origin. Everything else stays same-origin.
+  headers.set('Cross-Origin-Resource-Policy', pathname === '/human-check.js' ? 'cross-origin' : 'same-origin');
   // Marketing pages may be indexed; invitation, admin, member and API routes never.
   if (/^\/(g\/|api\/|new\b|recover\b)/.test(pathname)) headers.set('X-Robots-Tag', 'noindex, nofollow');
   if (pathname.startsWith('/api/') || res.headers.get('content-type')?.includes('text/html')) {
