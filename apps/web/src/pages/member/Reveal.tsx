@@ -133,7 +133,7 @@ export function Reveal({
           </ul>
         )}
         <p className="muted" style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-1)' }}>
-          A reveal is the giver&rsquo;s own statement, checked against the memo reference. It is only shown as agreed by both people once the recipient confirms it.
+          A reveal is the giver&rsquo;s own statement, checked against the memo reference. It appears here straight away. The line beside it says whether the recipient has confirmed it yet.
         </p>
       </section>
 
