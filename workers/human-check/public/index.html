@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
+    <!-- Filled in by the Worker from its PARENT_ORIGIN variable; the script posts the token to this origin and no other. -->
+    <meta name="mummer-parent-origin" content="" />
+    <title>Human check</title>
+    <style>
+      html, body { margin: 0; background: transparent; font-family: system-ui, sans-serif; }
+      #widget { min-height: 70px; display: flex; align-items: center; justify-content: flex-start; }
+    </style>
+  </head>
+  <body>
+    <div id="widget" aria-live="polite"></div>
+    <script src="/frame.js"></script>
+  </body>
+</html>
