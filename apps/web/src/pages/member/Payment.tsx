@@ -74,6 +74,7 @@ export function Payment({
   const integrity = useMemo(() => {
     const entry = roster.find((r) => r.id === bundle.recipient.memberId);
     if (!entry) return 'The person you are giving to is no longer listed in this exchange.';
+    if (entry.status === 'revoked') return `${entry.pseudonym} has left or been removed from this exchange, so please don’t send this gift. The host will sort it out with the group.`;
     if (entry.pseudonym !== bundle.recipient.pseudonym) return 'The name in your assignment doesn’t match the group list.';
     if (!entry.addressCommitment || addressCommitment(gid, entry.pseudonym, bundle.recipient.address) !== entry.addressCommitment) {
       return `The address in your assignment isn’t the one ${entry.pseudonym} registered.`;
