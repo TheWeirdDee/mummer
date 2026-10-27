@@ -1,5 +1,5 @@
 import { api, ApiError } from './api';
-import { clearLinkSaved, clearRotation, loadRotation, saveCredentials } from './session';
+import { clearLinkSaved, clearRotation, loadRotation, saveCredentials, type StoredCredentials } from './session';
 
 /**
  * Does the server currently accept this token for this exchange?
@@ -22,19 +22,26 @@ export async function probeToken(gid: string, token: string): Promise<'ok' | 're
  * the record is dropped. A pending token the server does not accept can therefore never be used, so access that was
  * revoked (for example by the host removing the member) is never restored by this path.
  */
-export async function adoptPendingRotation(gid: string, currentToken: string): Promise<'adopted' | 'none' | 'unknown'> {
+export type AdoptResult =
+  /** The server accepted the pending key. `persisted` is false when this browser would not store it: the record is kept and the caller must hold `creds` in memory and have the person save the link now. */
+  | { result: 'adopted'; creds: StoredCredentials; persisted: boolean }
+  | { result: 'none' }
+  | { result: 'unknown' };
+
+export async function adoptPendingRotation(gid: string, currentToken: string): Promise<AdoptResult> {
   const pending = loadRotation(gid);
-  if (!pending || pending.token === currentToken) return 'none';
+  if (!pending || pending.token === currentToken) return { result: 'none' };
   const verdict = await probeToken(gid, pending.token);
   if (verdict === 'ok') {
-    saveCredentials(pending);
-    clearRotation(gid);
+    const persisted = saveCredentials(pending);
+    // The fallback record is the only copy if the real one could not be written: drop it only after the real one is saved.
+    if (persisted) clearRotation(gid);
     clearLinkSaved(pending.role, gid);
-    return 'adopted';
+    return { result: 'adopted', creds: pending, persisted };
   }
   if (verdict === 'rejected') {
     clearRotation(gid);
-    return 'none';
+    return { result: 'none' };
   }
-  return 'unknown';
+  return { result: 'unknown' };
 }
