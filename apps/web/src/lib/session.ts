@@ -117,11 +117,17 @@ export function isLinkSaved(role: 'admin' | 'member', groupId: string): boolean 
 
 /* ---- Link replacement in flight: if the response is lost we can still recover the new credentials ---- */
 
-export function saveRotation(groupId: string, next: StoredCredentials): void {
+/** Returns true only when the record was written AND reads back identically: a replacement must never start without a durable copy. */
+export function saveRotation(groupId: string, next: StoredCredentials): boolean {
+  const s = storage();
+  if (!s) return false;
   try {
-    storage()?.setItem(`${PREFIX}rotation:${groupId}`, JSON.stringify(next));
+    const value = JSON.stringify(next);
+    const k = `${PREFIX}rotation:${groupId}`;
+    s.setItem(k, value);
+    return s.getItem(k) === value;
   } catch {
-    /* best effort */
+    return false;
   }
 }
 export function loadRotation(groupId: string): StoredCredentials | undefined {
