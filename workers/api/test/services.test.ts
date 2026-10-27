@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { fetchPriceFromProvider, resetPriceCacheForTests } from '../src/services.js';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fetchPriceFromProvider, resetPriceCacheForTests, verifyTurnstile } from '../src/services.js';
 import { HttpError, type Env } from '../src/env.js';
 import { usdCentsToZat } from '@mummer/zcash';
 
@@ -83,5 +83,35 @@ describe('price provider (real fetch path)', () => {
   it('the quote converts to the budget in exact integer zatoshis (end to end with the zcash package)', async () => {
     const q = await fetchPriceFromProvider(env(), Date.now());
     expect(usdCentsToZat(2500, q.usdPerZec)).toBe(79_260_000n); // $25 / $31.54 = 0.792644...; rounded to 4 decimals = 0.7926 ZEC
+  });
+});
+
+describe('Turnstile verification', () => {
+  const env = (extra: Record<string, string> = {}) => ({ ENVIRONMENT: 'production', TURNSTILE_SECRET: 'test-secret-not-real', ...extra }) as unknown as import('../src/env.js').Env;
+  const stub = (body: unknown, ok = true) => vi.stubGlobal('fetch', async () => new Response(JSON.stringify(body), { status: ok ? 200 : 500 }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('accepts a successful verification and refuses a failed or malformed one', async () => {
+    stub({ success: true, hostname: 'mummer-check.example.workers.dev' });
+    expect(await verifyTurnstile('tok', undefined, env())).toBe(true);
+    stub({ success: false });
+    expect(await verifyTurnstile('tok', undefined, env())).toBe(false);
+    stub({ success: true }, false);
+    expect(await verifyTurnstile('tok', undefined, env())).toBe(false);
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network');
+    });
+    expect(await verifyTurnstile('tok', undefined, env())).toBe(false);
+    expect(await verifyTurnstile('tok', undefined, { ENVIRONMENT: 'production' } as never)).toBe(false); // no secret: fails closed
+  });
+
+  it('when the check host is configured, a token solved on any other hostname is refused', async () => {
+    const e = env({ HUMAN_CHECK_ORIGIN: 'https://mummer-check.example.workers.dev' });
+    stub({ success: true, hostname: 'mummer-check.example.workers.dev' });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(true);
+    stub({ success: true, hostname: 'evil.example.com' });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
+    stub({ success: true });
+    expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
   });
 });
