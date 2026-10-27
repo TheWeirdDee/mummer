@@ -21,6 +21,8 @@ export function MemberPage() {
   const { gid = '', mid = '' } = useParams();
   usePageMeta('Your exchange | Mummer', 'Your private page in a Mummer exchange: your assignment, payment details and confirmations.', { index: false });
   const { state, reload, resolveConflict } = useCredentials('member', gid, mid);
+  // Credentials this browser would not store (blocked or full storage): held in memory so the person is never locked out mid-replacement.
+  const [memCreds, setMemCreds] = useState<StoredCredentials>();
 
   if (state.status === 'loading') {
     return (
@@ -55,7 +57,7 @@ export function MemberPage() {
       </PageContainer>
     );
   }
-  return <Home gid={gid} mid={mid} creds={state.creds} persisted={state.persisted} staleLink={!!state.staleLink} reloadCreds={reload} />;
+  return <Home gid={gid} mid={mid} creds={memCreds ?? state.creds} persisted={memCreds ? false : state.persisted} staleLink={!!state.staleLink} reloadCreds={reload} holdInMemory={setMemCreds} />;
 }
 
 const STATE_COPY: Record<GroupState, string> = {
@@ -67,7 +69,7 @@ const STATE_COPY: Record<GroupState, string> = {
   closed: 'Closed',
 };
 
-function Home({ gid, mid, creds, persisted, staleLink, reloadCreds }: { gid: string; mid: string; creds: StoredCredentials; persisted: boolean; staleLink: boolean; reloadCreds: () => void }) {
+function Home({ gid, mid, creds, persisted, staleLink, reloadCreds, holdInMemory }: { gid: string; mid: string; creds: StoredCredentials; persisted: boolean; staleLink: boolean; reloadCreds: () => void; holdInMemory: (c: StoredCredentials) => void }) {
   const group = useAsync((s) => api.group(gid, creds.token, s), [gid, creds.token]);
   usePolling(group.reload, 15_000, !!group.data);
   const view = group.data;
@@ -89,10 +91,12 @@ function Home({ gid, mid, creds, persisted, staleLink, reloadCreds }: { gid: str
         if (!cancelled) reloadCreds();
         return;
       }
-      if ((await adoptPendingRotation(gid, creds.token)) === 'adopted' && !cancelled) {
+      const adopted = await adoptPendingRotation(gid, creds.token);
+      if (adopted.result === 'adopted' && !cancelled) {
         setReplaced(true);
         setSaved(false);
-        reloadCreds();
+        if (adopted.persisted) reloadCreds();
+        else holdInMemory(adopted.creds);
       }
     })();
     return () => {
@@ -102,10 +106,11 @@ function Home({ gid, mid, creds, persisted, staleLink, reloadCreds }: { gid: str
   }, [groupError]);
   const [tab, setTab] = useState<'gift' | 'receive' | 'account'>('gift');
   useAppChrome({ title: view?.group.title, role: view?.me?.pseudonym });
-  const onReplaced = () => {
+  const onReplaced = (next: StoredCredentials, savedOnDevice: boolean) => {
     setReplaced(true);
     setSaved(false);
-    reloadCreds();
+    if (savedOnDevice) reloadCreds();
+    else holdInMemory(next);
     window.scrollTo({ top: 0 });
   };
 
