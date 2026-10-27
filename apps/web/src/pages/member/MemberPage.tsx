@@ -184,7 +184,7 @@ function Home({ gid, mid, creds, persisted, staleLink, reloadCreds, holdInMemory
 
       {st === 'needs_resolution' && (
         <Notice tone="warn" title="The host has flagged this exchange">
-          <p>Something needs sorting out as a group, for example someone left after the draw. Check the group chat. If your assignment is still showing below, it still works.</p>
+          <p>Something needs sorting out as a group, for example someone left after the draw. Check the group chat. If the person you are giving to has left, you will see that on your gift page and should wait for the host before sending anything.</p>
         </Notice>
       )}
 
