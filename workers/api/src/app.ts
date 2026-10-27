@@ -97,7 +97,8 @@ export function createApp(deps: Deps = defaultDeps): Hono<AppBindings> {
       ctx = undefined; // e.g. under test, where there is no ExecutionContext
     }
     const res = await inner.fetch(c.req.raw, c.env, ctx);
-    return applySecurityHeaders(res, new URL(c.req.url).pathname);
+    const url = new URL(c.req.url);
+    return applySecurityHeaders(res, url.pathname, url.protocol === 'https:');
   });
   return outer;
 }
