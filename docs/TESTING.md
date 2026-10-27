@@ -1,6 +1,6 @@
 # Testing
 
-Layered, and honest about what each layer does and does not prove. Counts below are from the final verification recorded in `docs/EVIDENCE.md`: Vitest 395 tests in 20 files (all passing); Playwright 74 tests in Chromium (73 in one command plus one re-run after the computer slept mid-test), with Firefox and WebKit run spec by spec.
+Layered, and honest about what each layer does and does not prove. Counts below are from the final verification recorded in `docs/EVIDENCE.md`: Vitest 409 tests in 21 files (all passing); Playwright 76 tests in Chromium (all passing in one command), with Firefox and WebKit run spec by spec; plus a live suite of 4 tests against real deployments.
 
 | Layer | Tool | Where | What it proves |
 |---|---|---|---|
@@ -41,7 +41,8 @@ Layered, and honest about what each layer does and does not prove. Counts below 
 ## Running
 
 ```bash
-npm run typecheck && npm test       # Vitest (20 files, 395 tests)
+npm run typecheck && npm test       # Vitest (21 files, 409 tests)
+LIVE_URL=https://<staging> npx playwright test -c playwright.live.config.ts   # the real Cloudflare stack (see below)
 npm run test:unit                   # package tests only (176)
 npm run test:crosscheck             # reference Rust ZIP 321 parser (needs Rust; opt-in)
 E2E_ALL_BROWSERS=1 npx playwright test --project=firefox   # or webkit; needs: npx playwright install firefox webkit
@@ -106,3 +107,13 @@ A security test once got an HTTP 500 from a join request in one of seven full ru
 | Closed exchanges accepted reveal confirmations | `interleaving.test.ts` |
 | Reveal copy contradicted the listing | `review-fixes.spec.ts` |
 | Removing someone in draw review forced a stale-list retry | `review-fixes.spec.ts` |
+
+## Live suite (`tests/live`, `playwright.live.config.ts`)
+
+Runs against a real deployment (`LIVE_URL`, optionally `EXPECT_COMMIT`). Four tests: health and commit, `/api/config`, security headers, absolute social image, the check host's framing and routes; the full journey (create with the human check, four joins, draw, payment request with a live price quote, sent, confirmations, link replacement, glass box over the real database, delete, no console errors, no unexpected third-party origin); and axe plus layout on nine public pages at 390 and 1280 px. The journey needs a deployment whose Turnstile uses Cloudflare's public always-pass test keys (`workers/api/wrangler.staging.toml`), because a real managed challenge needs a person; the other three run against production. `demo-exchange.spec.ts` (only with `DEMO=1`) makes a throwaway staging exchange for the manual wallet test in `docs/ZODL_MANUAL_TEST.md`. Reveal day cannot be tested live (the clock cannot be moved).
+
+On a live run the shared helpers wait for "Check passed." before submitting and stop sending the spoofed `cf-connecting-ip` header that the local runs use for per-browser rate limits (Cloudflare's edge rejects it with Error 1000).
+
+## Human-check host tests
+
+`workers/human-check/test` (4 Vitest tests): routes (only the page and script), the framing policy (`frame-ancestors` names only the parent; Cloudflare allowed only for script, frames and connections), malformed or missing parent origins meaning nobody may frame it, and secured error responses. The local E2E starts this Worker on port 8789 and `browser-security.spec.ts` loads the real cross-origin frame: it must load and run, post only to the app with its real origin, be unreadable by the app, refuse a foreign parent, and serve nothing else. An earlier version of that test accepted a timeout, which hid the production failure until the first real deployment; no test in that spec accepts a timeout now.
