@@ -26,7 +26,20 @@ const VIEWPORTS: [number, number][] = [
 
 const PUBLIC_PAGES = ['/', '/how-it-works', '/privacy', '/faq', '/wallet-guide', '/evidence', '/stats', '/recover', '/not-a-real-page', '/new'];
 
+/** Measures the page, then opens every closed disclosure and measures again (restoring them), so hidden content is checked when it is shown. */
 async function audit(page: Page, label: string) {
+  await auditOnce(page, label, false);
+  await auditOnce(page, `${label} (disclosures open)`, true);
+}
+
+async function auditOnce(page: Page, label: string, openAll: boolean) {
+  const opened = openAll ? await page.evaluate(() => {
+    const list = [...document.querySelectorAll('details:not([open])')];
+    list.forEach((d) => d.setAttribute('open', ''));
+    (window as unknown as { __opened: Element[] }).__opened = list;
+    return list.length;
+  }) : 0;
+  void opened;
   const report = await page.evaluate(() => {
     const vw = document.documentElement.clientWidth;
     const out = { overflowX: document.documentElement.scrollWidth - vw, escapes: [] as string[], small: [] as string[] };
@@ -40,6 +53,10 @@ async function audit(page: Page, label: string) {
     for (const el of document.querySelectorAll('body *')) {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue;
+      // Content of a closed <details> is never shown, but Firefox still lays it out and reports a box for it. The details element
+      // and its summary stay audited.
+      const closed = el.closest('details:not([open])');
+      if (closed && el !== closed && !el.closest('summary')) continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       if (r.right > vw + 1 && !scrolls(el)) out.escapes.push(`${el.tagName.toLowerCase()}.${(el as HTMLElement).className?.toString().slice(0, 40)} right=${Math.round(r.right)} vw=${vw}`);
@@ -54,6 +71,7 @@ async function audit(page: Page, label: string) {
     }
     return out;
   });
+  if (openAll) await page.evaluate(() => ((window as unknown as { __opened?: Element[] }).__opened ?? []).forEach((d) => d.removeAttribute('open')));
   expect(report.overflowX, `${label}: horizontal scroll`).toBeLessThanOrEqual(0);
   expect(report.escapes.slice(0, 5), `${label}: elements escaping the viewport`).toEqual([]);
   expect(report.small.slice(0, 5), `${label}: touch targets under 44px`).toEqual([]);
