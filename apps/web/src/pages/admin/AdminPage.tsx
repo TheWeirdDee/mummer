@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { LIMITS, hasDraw, type GroupState, type GroupView } from '@mummer/shared';
+import { LIMITS, hasDraw, isValidDate, type GroupState, type GroupView } from '@mummer/shared';
 import { LinkSaver } from '../../components/LinkSaver';
 import { PageContainer, useAppChrome } from '../../components/Layout';
 import { Badge, Button, CopyField, Dialog, Disclosure, Notice, ProgressBar, SkeletonLines, TextField } from '../../components/ui';
@@ -411,8 +411,12 @@ function ChangeDates({ gid, token, joinDeadline, revealDate, onChanged }: { gid:
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string }>();
   const changed = join !== joinDeadline || reveal !== revealDate;
   const save = async () => {
-    setBusy(true);
     setMsg(undefined);
+    if (!isValidDate(join) || !isValidDate(reveal)) {
+      setMsg({ tone: 'bad', text: 'Choose both dates before saving.' });
+      return;
+    }
+    setBusy(true);
     try {
       await api.extend(gid, token, { joinDeadline: join, revealDate: reveal });
       setMsg({ tone: 'ok', text: 'Dates updated. If joining had closed, it is open again.' });
