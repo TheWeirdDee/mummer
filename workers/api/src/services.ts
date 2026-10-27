@@ -2,7 +2,8 @@ import { HttpError, type Deps, type Env, type PriceQuote } from './env.js';
 
 /* ---------------- Price quote (first-party proxy, fail closed) ---------------- */
 
-const DEFAULT_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=zcash&vs_currencies=usd';
+const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=zcash&vs_currencies=usd';
+const KRAKEN_URL = 'https://api.kraken.com/0/public/Ticker?pair=ZECUSD';
 const CACHE_MS = 60_000;
 /** A quote older than this is never served, even if the upstream is down. */
 const MAX_STALE_MS = 5 * 60_000;
@@ -13,10 +14,8 @@ let cached: { quote: PriceQuote; at: number } | undefined;
 const MIN_USD_PER_ZEC = 1;
 const MAX_USD_PER_ZEC = 10_000;
 
-export function parseUsdPrice(text: string): string | undefined {
-  const m = /"zcash"\s*:\s*\{\s*"usd"\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*\}/.exec(text);
-  if (!m) return undefined;
-  const [whole, frac = ''] = m[1]!.split('.');
+function normalisePrice(decimal: string): string | undefined {
+  const [whole, frac = ''] = decimal.split('.');
   if (whole!.length > 7) return undefined;
   const rounded = frac.padEnd(8, '0').slice(0, 8);
   const price = `${whole}.${rounded}`;
@@ -25,23 +24,53 @@ export function parseUsdPrice(text: string): string | undefined {
   return n >= MIN_USD_PER_ZEC && n <= MAX_USD_PER_ZEC ? price : undefined;
 }
 
+/** CoinGecko: {"zcash":{"usd":123.45}}. */
+export function parseUsdPrice(text: string): string | undefined {
+  const m = /"zcash"\s*:\s*\{\s*"usd"\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*\}/.exec(text);
+  return m ? normalisePrice(m[1]!) : undefined;
+}
+
+/** Kraken: {"error":[],"result":{"XZECZUSD":{...,"c":["123.45000","0.5"],...}}}; "c" is the last trade. */
+export function parseKrakenPrice(text: string): string | undefined {
+  const m = /"error"\s*:\s*\[\s*\][\s\S]*?"XZECZUSD"\s*:\s*\{[\s\S]*?"c"\s*:\s*\[\s*"([0-9]+(?:\.[0-9]+)?)"/.exec(text);
+  return m ? normalisePrice(m[1]!) : undefined;
+}
+
+interface PriceProvider {
+  url: string;
+  parse(text: string): string | undefined;
+}
+
 export async function fetchPriceFromProvider(env: Env, nowMs: number): Promise<PriceQuote> {
   if (cached && nowMs - cached.at < CACHE_MS) return cached.quote;
-  const url = env.PRICE_URL ?? DEFAULT_PRICE_URL;
-  try {
-    const res = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
-    if (!res.ok) throw new Error(`upstream ${res.status}`);
-    const text = await res.text();
-    if (text.length > 4096) throw new Error('unexpected response size');
-    const usdPerZec = parseUsdPrice(text);
-    if (!usdPerZec) throw new Error('unparseable price');
-    const quote: PriceQuote = { usdPerZec, asOf: new Date(nowMs).toISOString(), source: new URL(url).hostname };
-    cached = { quote, at: nowMs };
-    return quote;
-  } catch {
-    if (cached && nowMs - cached.at < MAX_STALE_MS) return cached.quote;
-    throw new HttpError(503, 'quote_unavailable', 'A ZEC price is not available right now. Try again in a minute, or copy the details and set the amount in your wallet.');
+  // CoinGecko answers 403 to requests that come from Cloudflare Workers, found on the first deployment, so a second public source
+  // follows it. A configured PRICE_URL (tests, alternative providers) replaces both and is read as CoinGecko's format.
+  const providers: PriceProvider[] = env.PRICE_URL
+    ? [{ url: env.PRICE_URL, parse: parseUsdPrice }]
+    : [
+        { url: COINGECKO_URL, parse: parseUsdPrice },
+        { url: KRAKEN_URL, parse: parseKrakenPrice },
+      ];
+  const reasons: string[] = [];
+  for (const p of providers) {
+    try {
+      const res = await fetch(p.url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
+      if (!res.ok) throw new Error(`upstream ${res.status}`);
+      const text = await res.text();
+      if (text.length > 4096) throw new Error('unexpected response size');
+      const usdPerZec = p.parse(text);
+      if (!usdPerZec) throw new Error('unparseable price');
+      const quote: PriceQuote = { usdPerZec, asOf: new Date(nowMs).toISOString(), source: new URL(p.url).hostname };
+      cached = { quote, at: nowMs };
+      return quote;
+    } catch (e) {
+      // The reason only (an HTTP status, a size or parse problem, a timeout): never the response body, which could be anything.
+      reasons.push(`${new URL(p.url).hostname}: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+    }
   }
+  console.error('price_unavailable', { reasons });
+  if (cached && nowMs - cached.at < MAX_STALE_MS) return cached.quote;
+  throw new HttpError(503, 'quote_unavailable', 'A ZEC price is not available right now. Try again in a minute, or copy the details and set the amount in your wallet.');
 }
 
 export function resetPriceCacheForTests(): void {
