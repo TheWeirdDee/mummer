@@ -18,6 +18,7 @@ publicRoutes.get('/config', (c) =>
   json(c, {
     humanCheckRequired: humanCheckRequired(c.env),
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY ?? null,
+    humanCheckOrigin: c.env.HUMAN_CHECK_ORIGIN ?? null,
     environment: c.env.ENVIRONMENT,
     commit: c.env.BUILD_COMMIT ?? 'unknown',
   }),
