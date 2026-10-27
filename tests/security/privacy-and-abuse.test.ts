@@ -355,6 +355,47 @@ describe('metadata minimisation', () => {
   });
 });
 
+describe('recipient-only reveals stay between the two people', () => {
+  it('no host-visible response, and no public one, carries a private reveal: not the pair, not the audience', async () => {
+    const s = await setupGroup(w, 6);
+    expect((await drawGroup(w, s.c, s.host, s.members)).res.status).toBe(201);
+    const bundles = new Map<string, Awaited<ReturnType<typeof openOwnAssignment>>>();
+    for (const m of s.members) bundles.set(m.id, await openOwnAssignment(s.c, s.host.groupId, m));
+    w.clock.set('2026-12-24T00:00:01.000Z');
+    const giver = s.members[0]!;
+    const b = bundles.get(giver.id)!;
+    const recipientId = b.recipient.memberId;
+    const r = await s.c.post(`/api/groups/${s.host.groupId}/reveals`, { drawVersion: 1, recipientId, reference: b.reference, audience: 'recipient' }, giver.token);
+    expect(r.status).toBe(201);
+
+    const gid = s.host.groupId;
+    const hostVisible = [
+      `/api/groups/${gid}`,
+      `/api/groups/${gid}/glassbox`,
+      `/api/groups/${gid}/reveals`,
+      `/api/groups/${gid}/invite`,
+    ];
+    for (const path of hostVisible) {
+      const res = await s.c.get(path, s.host.token);
+      const text = JSON.stringify(res.body);
+      expect(res.status, path).toBe(200);
+      expect(text, path).not.toContain('"audience":"recipient"');
+      // The two ids never appear together in one reveal-shaped object.
+      expect(text, path).not.toMatch(new RegExp(`${giver.id}[^}]*${recipientId}|${recipientId}[^}]*${giver.id}`));
+    }
+    // A bystander and an unauthenticated caller see nothing of it either.
+    const bystander = s.members.find((m) => m.id !== giver.id && m.id !== recipientId)!;
+    expect(JSON.stringify((await s.c.get(`/api/groups/${gid}/reveals`, bystander.token)).body)).not.toContain(recipientId);
+    expect((await s.c.get(`/api/groups/${gid}/glassbox`)).status).toBe(401);
+    // Only the two people involved can see it.
+    expect(JSON.stringify((await s.c.get(`/api/groups/${gid}/reveals`, giver.token)).body)).toContain(recipientId);
+    const recipient = s.members.find((m) => m.id === recipientId)!;
+    expect(JSON.stringify((await s.c.get(`/api/groups/${gid}/reveals`, recipient.token)).body)).toContain(giver.id);
+    // The host learns only that one private reveal exists.
+    expect((await s.c.get(`/api/groups/${gid}/glassbox`, s.host.token)).body.privateRevealCount).toBe(1);
+  });
+});
+
 describe('reference hygiene', () => {
   it('generated references normalise to themselves and are accepted only in canonical form by the server', async () => {
     const r = generateReference();
