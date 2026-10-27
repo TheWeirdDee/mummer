@@ -339,6 +339,30 @@ describe('reveals', () => {
     expect((await list(s.host.token)).map((x) => x.giverId)).toEqual([g2.id]); // host sees group-audience reveals only
   });
 
+  it('the host glass box never exposes a recipient-only reveal: not the pair, not the ids, only that one exists', async () => {
+    const s = await drawn();
+    w.clock.set('2026-12-24T00:00:01.000Z');
+    const g1 = s.members[0]!;
+    const g2 = s.members[1]!;
+    const b1 = s.bundles.get(g1.id)!;
+    const b2 = s.bundles.get(g2.id)!;
+    await reveal(s, g1, b1.recipient.memberId, b1.reference, 'recipient');
+    await reveal(s, g2, b2.recipient.memberId, b2.reference, 'group');
+    const gb = (await s.c.get(`/api/groups/${s.host.groupId}/glassbox`, s.host.token)).body;
+    // Only the reveal the giver chose to show the whole group is listed, and the same pair-set as the normal host listing.
+    expect(gb.reveals.map((r: { giver_member_id: string }) => r.giver_member_id)).toEqual([g2.id]);
+    expect(gb.privateRevealCount).toBe(1);
+    // The private pair appears nowhere in the response, in any field.
+    const wire = JSON.stringify(gb);
+    expect(wire).not.toContain(b1.recipient.memberId + '"' + ',"audience":"recipient"');
+    expect(wire).not.toContain('"audience":"recipient"');
+    // The giver's id of the private reveal can only appear as a roster member and an assignment key, never beside a recipient.
+    expect(gb.reveals.some((r: { giver_member_id: string }) => r.giver_member_id === g1.id)).toBe(false);
+    // And it matches what the host gets from the ordinary listing.
+    const normal = (await s.c.get(`/api/groups/${s.host.groupId}/reveals`, s.host.token)).body.reveals as { giverId: string }[];
+    expect(gb.reveals.map((r: { giver_member_id: string }) => r.giver_member_id).sort()).toEqual(normal.map((x) => x.giverId).sort());
+  });
+
   it('only the named recipient can confirm; a stranger cannot', async () => {
     const s = await drawn();
     w.clock.set('2026-12-24T00:00:01.000Z');
