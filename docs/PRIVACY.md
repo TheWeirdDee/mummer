@@ -40,7 +40,7 @@ Mummer helps keep gift payments shielded on Zcash, while limiting what the organ
 | Rate-limit buckets | `rate_limits` | Salted hash of (scope, client address) + count | Pruned after about two hours |
 | Human-check tickets | `human_tickets` | Hash | Ten minutes |
 
-**Not stored anywhere:** IP addresses in the database, request bodies in logs, analytics, cookies, advertising or session-replay identifiers. No third-party scripts load on any page except the sandboxed human-check frame on create/join.
+**Not stored anywhere:** IP addresses in the database, request bodies in logs, analytics, cookies, advertising or session-replay identifiers. No third-party script loads on any page of the app. On create and join, a frame from a separate origin (the `mummer-check` Worker) loads Cloudflare Turnstile; that origin cannot read the app, and Cloudflare can see the visitor's connection and browser signals as any Turnstile deployment can.
 
 **On the user's device:** the person's key and token in local storage (so they can return), non-secret form drafts in session storage (the address is deliberately **not** kept in a draft), a pending link replacement while one is in flight, and, if they choose, their local reveal-day guess. "Forget this device" removes all of these.
 
