@@ -9,17 +9,30 @@ Environment: Windows 11, Node 24.13.1, Chromium 156.0.8078.4, Firefox 157.0 and 
 | Check | Command | Result |
 |---|---|---|
 | Type check, all workspaces | `npm run typecheck` | No errors |
-| Unit, API integration and security | `npx vitest run` | **395 passed, 0 failed, 20 files** |
-| Package tests only | `npm run test:unit` | 176 passed in 7 files (this script was broken before the build review: it selected a project that did not exist) |
+| Unit, API integration, race and security tests | `npx vitest run` | **409 passed, 0 failed, 21 files** |
+| Package tests only | `npm run test:unit` | 176 passed in 7 files |
 | Production build | `npm run build` | Succeeds; first-party assets only |
 | Dependency audit | `npm audit` | 0 vulnerabilities |
 | Reference-parser cross-check | `npm run test:crosscheck` | 3 passed (needs Rust; opt-in) |
-| Browser, Chromium | `npx playwright test` | **74 tests.** The one-command run: 73 passed, 1 failed with `net::ERR_NETWORK_IO_SUSPENDED` at 844x390 because the computer went to sleep during that test (the run took 1.9 hours of wall-clock time for about 11 minutes of testing). That viewport was re-run alone and passed. A complete 74-of-74 single run was therefore not obtained |
-| Wrangler config | `wrangler deploy --dry-run` | Succeeds; nothing deployed |
+| Browser, Chromium | `npx playwright test` | **76 passed, 0 failed in one command (9.8 minutes)** |
+| Live deployment, read-only (production) | `LIVE_URL=https://mummer.mummer-app.workers.dev npx playwright test -c playwright.live.config.ts -g "reports its commit|accessible"` | 3 passed |
+| Live deployment, full journey (staging) | `LIVE_URL=https://mummer-staging.mummer-app.workers.dev npx playwright test -c playwright.live.config.ts` | 4 passed (headers and commit, full journey, axe and layout at 390 and 1280 px) |
+| Wrangler config | `wrangler deploy --dry-run` | Succeeds |
 
-Vitest per file: security 21; crypto 39 + 4; shared 42; draw 20; zcash 21 + 6 + 46; API: diagnostics 3, extend 10, flow 7, groups 42, hardening 17, interleaving 17, join-draw 30, payments-reveal 26, resilient-d1 5, routes 27, security-headers 4, services 8.
+Vitest per file: security 21; crypto 39 + 4; shared 42; draw 20; zcash 21 + 6 + 46; API: diagnostics 3, extend 10, flow 7, groups 43, hardening 17, interleaving 17, join-draw 30, payments-reveal 26, resilient-d1 5, routes 27, security-headers 7, services 14; human-check 4.
 
-Playwright per file (Chromium): a11y 13, browser-security 6, exchange 1, link-replacement 10, metadata 6, recovery 6, responsive 12, review-fixes 4, storage-failure 4, validation 12.
+Playwright per file (Chromium): a11y 13, browser-security 8, exchange 1, link-replacement 10, metadata 6, recovery 6, responsive 12, review-fixes 4, storage-failure 4, validation 12.
+
+## Live deployment (Cloudflare, 2026-10-27)
+
+Full detail in `docs/DEPLOYMENT.md`. Summary of what was observed:
+
+- **Resources created (free tier, no billing):** workers.dev subdomain `mummer-app`; D1 databases `mummer` and `mummer-staging` (both migrated, 0001 and 0002); Workers `mummer`, `mummer-check`, `mummer-staging`, `mummer-staging-check`; one Turnstile widget (managed, restricted to the production check hostname). Secrets were uploaded from files outside the repository that were deleted afterwards.
+- **Production:** `/api/health` returns `ok`, `production` and the deployed commit; `/api/config` reports the human check required with the site key and check origin; headers and CSP as designed; axe clean and no horizontal scroll on nine public pages at 390 and 1280 px; D1 holds zero exchanges.
+- **Turnstile:** the planned opaque-origin sandbox failed (error 300030, messages from origin "null" discarded; even Cloudflare's always-pass key gave no token). After moving the check to its own origin, the real widget renders inside it on production, and the always-pass control delivers a token to the app with origin `https://mummer-check.mummer-app.workers.dev` and no origin warnings. The real managed challenge holds an automated browser (headless and headed), as designed, so **it has not been completed on production**.
+- **Staging (public test keys), full journey in a real browser:** create (human check passed), four joins, draw, assignment with payment QR and a live price quote (Kraken), sent, confirmations with references, link replacement, glass box, delete, no console errors, no third-party origin contacted by the pages: passed. **D1 contents after it** (real database): sealed profiles and bundles all 747 characters, 64-character hashes and commitments, day-granular dates, zero plaintext hits for the wishlist text or an address prefix.
+- **Problems found only by deploying, all fixed with tests that fail without the fix:** the sandboxed frame; CoinGecko answering 403 to Workers (Kraken added); Cloudflare's test keys returning the placeholder hostname `example.com` (the hostname binding skips only responses Cloudflare marks as test-key); the test helper's spoofed `cf-connecting-ip` header being rejected by the edge with Error 1000; a transient Error 1000 and DNS failures on this machine during runs (not reproducible on retry).
+- **Not verified:** the real managed challenge on production; Cloudflare's dashboard logging setting; reveal day on a live deployment; edge log retention.
 
 ## Other browsers (Playwright; opt-in with `E2E_ALL_BROWSERS=1`)
 
@@ -75,9 +88,10 @@ See `docs/TESTING.md`. A fake clock and fixed price exist only in the API tests 
 
 | Item | Reason |
 |---|---|
-| Deployed environment checks | No Cloudflare destination designated; nothing deployed |
-| Real Turnstile, including inside the sandboxed frame | No account or site key |
-| Zodl (or any wallet) scanning a Mummer QR, memo prefill, sending, receiving | No devices, funds or signing in this environment; Zodl has no Windows build and no emulator tooling or virtualization is available (R01/R02/R12; `docs/INTEGRATION_RESEARCH.md`) |
+| Reveal day on a live deployment | The clock cannot be moved; earliest reveal is hours away |
+| The real managed Turnstile challenge on production | Needs a person; automation is held by design |
+| Zodl (or any wallet) scanning a Mummer QR, memo prefill, sending, receiving | No devices here; Zodl has no Windows build and no emulator or virtualization is available. A no-money manual test is written up in `docs/ZODL_MANUAL_TEST.md` (R01/R02/R12) |
+| Any Zcash testnet transaction | Tooling downloaded but the build of `zcash-devtool` was blocked by the harness permission policy; no wallet or key exists (`docs/INTEGRATION_RESEARCH.md`) |
 | A real-ZEC trial with 4 to 5 consenting people | Requires real funds and people |
 | Screen reader | Not available to the automation (`docs/ACCESSIBILITY_MANUAL_CHECKLIST.md`) |
 | Real iOS Safari, Android Chrome, other devices | Not available |
