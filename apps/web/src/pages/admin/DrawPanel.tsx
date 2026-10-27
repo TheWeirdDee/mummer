@@ -140,6 +140,9 @@ export function DrawPanel({ gid, creds, view, onDone }: { gid: string; creds: St
       setExclusions((ex) => ex.filter(([a, b]) => a !== c.id && b !== c.id));
       setRemoving(undefined);
       onDone();
+      // The removal moved the members version. Reload the real list (not just the number: someone might also have joined),
+      // so the next draw is built from, and checked against, what the server now holds.
+      await loadProfiles();
     } catch (e) {
       setError((e as ApiError).message);
       setRemoving(undefined);
