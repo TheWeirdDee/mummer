@@ -195,7 +195,7 @@ describe('credential rotation (compromised link)', () => {
     const fresh = await generateKeyPair();
     const newToken = generateToken();
     const sealed = resealAssignment(original, encodeKey(fresh.publicKey));
-    const r = await s.c.post(`/api/groups/${s.host.groupId}/members/${m.id}/rotate`, { newTokenHash: hashToken(newToken), newPublicKey: encodeKey(fresh.publicKey), newSealedBundle: sealed }, m.token);
+    const r = await s.c.post(`/api/groups/${s.host.groupId}/members/${m.id}/rotate`, { newTokenHash: hashToken(newToken), newPublicKey: encodeKey(fresh.publicKey), newSealedBundle: sealed, drawVersion: 1 }, m.token);
     expect(r.status).toBe(200);
     expect((await s.c.get(`/api/groups/${s.host.groupId}/members/${m.id}/assignment`, m.token)).status).toBe(401);
     const got = await s.c.get(`/api/groups/${s.host.groupId}/members/${m.id}/assignment`, newToken);
@@ -226,7 +226,7 @@ describe('credential rotation (compromised link)', () => {
       const token = generateToken();
       const r = await s.c.post(
         `/api/groups/${s.host.groupId}/members/${m.id}/rotate`,
-        { newTokenHash: hashToken(token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: resealAssignment(original, encodeKey(k.publicKey)) },
+        { newTokenHash: hashToken(token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: resealAssignment(original, encodeKey(k.publicKey)), drawVersion: 1 },
         m.token,
       );
       return { r, token, k };
@@ -246,9 +246,9 @@ describe('credential rotation (compromised link)', () => {
     const [a, b] = [s.members[0]!, s.members[1]!];
     const k = await generateKeyPair();
     const sealed = resealAssignment(s.bundles.get(a.id)!, encodeKey(k.publicKey));
-    const taken = await s.c.post(`/api/groups/${s.host.groupId}/members/${a.id}/rotate`, { newTokenHash: hashToken(b.token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: sealed }, a.token);
+    const taken = await s.c.post(`/api/groups/${s.host.groupId}/members/${a.id}/rotate`, { newTokenHash: hashToken(b.token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: sealed, drawVersion: 1 }, a.token);
     expect(taken.status).toBe(409);
-    const same = await s.c.post(`/api/groups/${s.host.groupId}/members/${a.id}/rotate`, { newTokenHash: hashToken(a.token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: sealed }, a.token);
+    const same = await s.c.post(`/api/groups/${s.host.groupId}/members/${a.id}/rotate`, { newTokenHash: hashToken(a.token), newPublicKey: encodeKey(k.publicKey), newSealedBundle: sealed, drawVersion: 1 }, a.token);
     expect(same.status).toBe(422);
     // The failed attempts changed nothing: the original token still works.
     expect((await s.c.get(`/api/groups/${s.host.groupId}/members/${a.id}/assignment`, a.token)).status).toBe(200);
