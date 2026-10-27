@@ -1,116 +1,103 @@
 # Final audit
 
-State of Mummer at the end of this build, in five buckets: implemented, tested, verified in production, externally blocked, and not completed. "Tested" means an automated test in this repository passes locally. **Nothing is verified in production because nothing is deployed.** Code and tests were verified at commit `a8aa088`; later commits change documentation only. Exact run results and the runs that were *not* clean are in `docs/EVIDENCE.md`.
+State of Mummer after its first real deployment, in five buckets: implemented, tested, verified in production, externally blocked, and not completed. "Tested" means an automated test in this repository passes. Exact run results, and the runs that were not clean, are in `docs/EVIDENCE.md`.
 
 ## 1. Implemented
 
-- Noncustodial Secret Santa web app (React, Cloudflare Worker, D1) with the full journey: create, invite, join, draw, assignment, payment request, sent, received, reveal, delete, recovery; link replacement, backup, leaving, extending dates.
-- Real ZIP 316 unified-address decoding, address policy, ZIP 321 payment requests with exact zatoshi arithmetic and a 512-byte memo; the output is also accepted by the reference Rust `zip321` parser.
-- Client-side sealed boxes (libsodium), padded blobs, context binding, bearer tokens stored as hashes, Argon2id passphrase backups, fragment-based private links, address commitments, host-key fingerprint in the invite.
-- Trusted-host draw with an atomic commit pinned to the draw and members versions; every member write (replacement, sent, acknowledgment, reveal, confirmation, leave) is pinned to the state it validated.
-- Aggregate-only progress, totals-only host glass box that never reveals a recipient-only reveal, consent-gated reveals, thresholded public stats.
-- Security headers on every response, strict CSP with no inline script or eval, sandboxed human-check frame, rate limiting, retention purge, structured error diagnostics with ids and blobs masked.
-- Link-safety handling for browser storage that is blocked, full or failing; conflict screen; recovery of a replacement whose reply was lost.
-- Accessibility work, responsive layouts, absolute social-image URLs.
-- One-command local development (`npm run dev`) and a documentation set in `docs/`.
+- Noncustodial Secret Santa web app (React, Cloudflare Workers, D1): create, invite, join, draw, assignment, payment request, sent, received, reveal, delete, recovery; link replacement, backup, leaving, extending dates.
+- Real ZIP 316 address decoding, address policy, ZIP 321 payment requests with exact zatoshi arithmetic and a 512-byte memo; the output is also accepted by the reference Rust `zip321` parser.
+- Client-side sealed boxes, padded blobs, context binding, hashed bearer tokens, Argon2id backups, fragment-based private links, address commitments, host-key fingerprint in the invite.
+- Trusted-host draw with an atomic commit pinned to the draw and members versions; every member write pinned to the state it validated.
+- Totals-only host glass box that never reveals a recipient-only reveal; consent-gated reveals; thresholded public stats.
+- Strict CSP (no inline script, no eval, no third-party origin on app pages), security headers everywhere, rate limiting, retention purge, masked diagnostics.
+- **A separate-origin human-check host** (its own Worker) that runs Cloudflare Turnstile; the app accepts messages only from that exact origin, the check page can be framed only by the app, and the server accepts a token only if Cloudflare says it was solved on the check host.
+- Two price sources (CoinGecko, then Kraken), failing closed.
+- Handling of blocked, full or failing browser storage; conflict screen; recovery of a link replacement whose reply was lost.
+- Deployed to Cloudflare (free tier) with staging and production environments, a repeatable deployment guide, a live test suite, and `npm run dev` for local work.
 
-## 2. Tested (automated, local)
+## 2. Tested (automated)
 
 | Layer | Result |
 |---|---|
 | `npm run typecheck` | Clean |
-| Vitest (unit, API on a real D1, security, race tests) | 395 passed in 20 files |
-| Playwright, Chromium | 74 tests; one-command run 73 passed, 1 interrupted by the computer sleeping and passed on rerun |
-| Playwright, Firefox and WebKit | Run spec by spec: all passed except the six-participant journey in WebKit (unresolved; see below) |
-| axe-core | No violations on every route and key state at 390 and 1280 px in all three browsers |
+| Vitest (unit, API on a real D1, race tests, security, human-check host) | **409 passed, 21 files** |
+| Playwright, Chromium | **76 passed in one command** |
+| Playwright, Firefox and WebKit | Run spec by spec: all passed except the six-participant journey in WebKit (unresolved) |
+| axe-core | No violations on every route and key state at 390 and 1280 px in all three browsers, and on nine live pages on both deployments |
 | Responsive | 12 viewports (320 to 1920 plus two landscape), measured with disclosures closed and open |
 | Reference-parser cross-check | 3 passed |
+| Live suite | Production read-only checks 3 passed; staging full journey and checks 4 passed |
 | `npm audit` | 0 vulnerabilities |
 
 ## 3. Verified in production
 
-**None.** The code is on GitHub (https://github.com/TheWeirdDee/mummer), but no Cloudflare destination was designated, so nothing is deployed. `docs/DEPLOYMENT.md` is a sourced, step-by-step checklist with costs, token permissions, secrets, the logging decision and verification commands; `wrangler deploy --dry-run` validates the configuration.
+Production is https://mummer.mummer-app.workers.dev (check host https://mummer-check.mummer-app.workers.dev). Verified there: health and deployed commit; `/api/config`; headers and CSP; absolute social image; real 404s; the check host's framing rules; axe and layout on nine public pages at 390 and 1280 px; the real Turnstile widget renders inside the check frame; an always-pass control delivers a token to the app with the verified origin; the database holds no exchanges.
 
-## 4. Externally blocked
+**Not verified in production:** an actual exchange. Creating one needs a person to pass the real challenge (below). The whole journey was verified on **staging** instead, which differs from production only in using Cloudflare's public test keys and its own database.
+
+## 4. Externally blocked (needs you or someone else)
 
 | Item | Needs |
 |---|---|
-| Deployment and live verification | A designated Cloudflare account and project (free tier is enough to start) |
-| Real Turnstile, including inside Mummer's sandboxed opaque-origin frame (the highest-risk first-deployment check) | A Cloudflare account and site key |
-| Zodl (or any wallet) scanning a Mummer QR, memo prefill, sending, receiving (R01/R02) | A phone with Zodl and a small funded wallet; none can run in this environment (`docs/INTEGRATION_RESEARCH.md`) |
-| A real-ZEC exchange with 4 to 5 consenting people (R12) | Real funds and people; a spending limit set by the owner |
-| ZECATHON rules (R05), trademark clearance (R11), edge logging (R09) | The official site behind a login (the deadline appears to be 2026-10-28 and is unconfirmed), a trademark search by counsel, a Cloudflare account |
+| The real Turnstile challenge on production, then one throwaway exchange | A person in a normal browser (`docs/DEPLOYMENT.md`, "Manual steps") |
+| Confirming Workers Logs are off | A look at the Cloudflare dashboard |
+| Reveal day on a live exchange | Waiting about 16 hours after creating one in the earliest timezone |
+| Zodl scanning a Mummer QR, memo and amount display, cancellation (R01/R02) | A phone with Zodl; no money needed for the scan test: `docs/ZODL_MANUAL_TEST.md` |
+| Zcash testnet send, receipt and memo | **A decision from you.** Tooling (protoc, `zcash-devtool` source) is downloaded outside the repo, but building it was blocked by the harness's permission policy and not retried another way; then a human step for test coins (a faucet CAPTCHA or a Discord request). Steps in `docs/INTEGRATION_RESEARCH.md` |
+| A real-ZEC exchange (R12) | Real funds, people and a spending limit from you |
+| ZECATHON rules, deadline (appears to be 2026-10-28), licence and demo requirements | The official site, behind a login |
+| Trademark clearance for "Mummer" | A search by counsel |
 | Screen-reader pass | A person with NVDA, VoiceOver and TalkBack (`docs/ACCESSIBILITY_MANUAL_CHECKLIST.md`) |
 | Real iOS Safari and Android devices | Devices |
-| Independent third-party security review | A reviewer |
+| Independent security review | A reviewer |
+| Submission | Your decision and accounts; nothing was submitted |
 
 ## 5. Not completed
 
-- Host-blind draw (F14), independent shielded-payment proof (F15), company-funded mode (F13), calendar file (F16): stated as not built in the product and the docs.
-- The six-participant journey in WebKit (`exchange.spec.ts`) does not pass: it stalls at a different step each run while every shorter WebKit spec passes. Cause not established.
-- A complete single-command Playwright run of 74 of 74 in Chromium (one test was interrupted by the machine sleeping).
-- The conflict screen when the chosen link also cannot be stored: implemented, no automated test.
-- Usability targets from PRD v0.1: not measured; no figures are claimed.
+- Host-blind draw (F14), independent shielded-payment proof (F15), company-funded mode (F13), calendar file (F16): stated as not built.
+- No Zcash testnet or Zodl result of any kind.
+- The six-participant journey in WebKit does not pass (it stalls at a different step each run; this machine was nearly out of RAM during runs; cause not established).
+- No automated test of the "chosen link cannot be stored" conflict path.
+- Usability targets from PRD v0.1: not measured.
 
 ## Findings and resolutions
 
-### Build review of 27 October (`docs/BUILD_REVIEW.md`, 12 findings)
-
-Every finding was reproduced or confirmed before fixing; each fix has a test that fails without it (the race tests, the storage tests and the UI tests were each run against the pre-fix code).
-
-| # | Finding | Resolution |
-|---|---|---|
-| 1 | Recipient-only reveals leaked through the host's glass box | Same audience rule as the listing; the host sees a count only |
-| 2 | Link replacement could race the draw and strand an assignment | The replacement applies only if the assignment situation (and draw version) is still what the request was built for; the request carries the bundle's draw version |
-| 3 | "Sent", acknowledgment (and reveal) writes not pinned to the validated draw and phase | Each write repeats the checked facts in its SQL and checks the row count; stale requests get `409`; idempotent repeats still succeed |
-| 4 | Storage failure during replacement could lose the new key | No replacement without a durable, read-back copy; the record is kept until the real one is saved; the page holds the key in memory if storage fails |
-| 5 | Payment request shown for a removed recipient | Refused with an explanation; banner copy no longer says the assignment "still works" |
-| 6 | Leave during a draw reported a removal that did not happen; false audit event | Row count checked, audit event conditional, retried under the post-draw rules |
-| 7 | Clearing a date threw before validation | Both dates validated before any arithmetic, in the create form and the change-dates form |
-| 8 | Recovery failed when storage was blocked | Credentials carried in the destination fragment; a chosen link that cannot be stored is used from memory and its fragment kept |
-| 9 | `npm run test:unit` selected a nonexistent project | Fixed; runs 176 tests |
-| 10 | Closed exchanges accepted reveal confirmations | Refused in the route and in the UPDATE |
-| 11 | Reveal copy promised consent the listing did not enforce | Copy now matches the listing |
-| 12 | Removing someone in draw review forced a stale-list retry | The list is reloaded from the server after a removal |
-
-The review's remaining gaps were closed too: deterministic interleaving tests, browser coverage for blocked and failing storage and for cleared dates, and a privacy sweep of every host-visible response after a private reveal. The review's own full-suite stall (`spawn EPERM`) was a limit of its sandbox.
-
-### Other findings in this round
+### From the first real deployment (found only because it was deployed)
 
 | Finding | Resolution |
 |---|---|
-| Intermittent HTTP 500 in the test suite | Cause established under load (loopback port exhaustion, `EADDRINUSE`); guarded in the test harness only; the very first occurrence is consistent with it but not proven (`docs/KNOWN_LIMITATIONS.md` item 23) |
-| Firefox: zod's feature probe reported as a CSP violation | Zod runs without just-in-time compilation |
-| WebKit: `upgrade-insecure-requests` broke every subresource on http://127.0.0.1 | Dropped only for plain-HTTP loopback; production HTTPS keeps the full policy; tested |
-| `og:image` and `twitter:image` were relative URLs | The Worker completes them from the request origin; tested |
-| Stale tab dead-ended after another tab replaced the link | The tab probes the saved key and adopts it; tested against the pre-fix code |
-| `wrangler.toml` left Workers Logs at their default (on) | Disabled explicitly; to be verified in the dashboard after deployment |
-| `npm run dev` did not exist | Added, with setup in `docs/SETUP.md` |
-| Responsive audit counted closed-disclosure content (Firefox artifact) | The audit skips unseen content and also measures with every disclosure open |
+| **The planned Turnstile isolation does not work.** In an opaque-origin sandbox Turnstile's challenge frame gets origin "null", its messages are discarded (error 300030) and even Cloudflare's always-pass key never yields a token. All local tests passed because the check is off in development, and the one frame test accepted a timeout | The check moved to a separate origin (decision D-37) with a strict CSP, parent-only framing, origin-checked messaging and a host-bound token; the local E2E runs the second Worker; the frame test no longer accepts a timeout; verified live with an always-pass control |
+| CoinGecko answers 403 to Cloudflare Workers, so no payment amount could be shown | Kraken added as a second source; `price_unavailable` now logs the reason per source; tested |
+| Cloudflare's test keys report the placeholder hostname `example.com`, which the new host binding refused | The binding is skipped only for responses Cloudflare marks as test-key; tested, including that nothing else bypasses it |
+| The test helper's spoofed `cf-connecting-ip` header makes Cloudflare's edge answer Error 1000 | Not sent on live runs |
 
-Earlier audits (security, protocol, product) are listed in earlier versions of this file in git history; all their findings were fixed with regression tests.
+### From the build review of 27 October (`docs/BUILD_REVIEW.md`, 12 findings)
+
+All 12 fixed, each with a test that fails without the fix: private reveals hidden from the host's glass box; link replacement no longer races the draw; "sent", acknowledgment, reveal, confirmation and leave writes pinned to the state they validated; blocked or failing storage cannot lose a replacement key; no payment request for a removed recipient; leave during a draw no longer reports a removal that did not happen; cleared dates are validated; recovery survives blocked storage; `npm run test:unit` runs; closed exchanges refuse confirmations; reveal copy matches the listing; removing someone in draw review no longer forces a stale-list retry.
+
+### Other
+
+The intermittent test-suite HTTP 500 was diagnosed as loopback port exhaustion in the test harness on Windows and guarded there (`docs/KNOWN_LIMITATIONS.md` item 23); the very first occurrence is consistent with it but not proven. Firefox and WebKit found two real defects (zod's feature probe reported as a CSP violation; `upgrade-insecure-requests` breaking WebKit on plain-HTTP loopback) and one wrong test assumption (that Tab reaches links in Safari), all fixed. Earlier audits' findings are in earlier versions of this file and were all fixed.
 
 ## Open items
 
-1. The WebKit journey (above).
-2. No automated test of the "chosen link cannot be stored" conflict path.
-3. Residual risks in `docs/KNOWN_LIMITATIONS.md` and `docs/PRIVACY_AUDIT.md` (trusted host, a malicious operator serving code, metadata, small groups, self-reported states).
-4. The repository is public by the owner's choice; it contains no secrets (history scanned for key, token and credential patterns; `.dev.vars` and environment files are ignored), but all documentation, including the threat model and known limitations, is visible.
-5. A misplaced doc comment above `parseUsdPrice` in `workers/api/src/services.ts` (cosmetic).
+1. Real Turnstile on production, WebKit journey, wallet and testnet verification (above).
+2. Residual design risks in `docs/KNOWN_LIMITATIONS.md` and `docs/PRIVACY_AUDIT.md` (trusted host, a malicious operator serving code, metadata, small groups, self-reported states, price sources not cross-checked).
+3. The repository is public by the owner's choice. It contains no secrets (history scanned; `.dev.vars` and environment files ignored; the Turnstile secret and the salt live only in Cloudflare), but the full threat model and limitations are visible. The database ids and the Turnstile site key in `wrangler.toml` are public identifiers, not secrets.
+4. Cosmetic: a misplaced doc comment above `parseUsdPrice` in `workers/api/src/services.ts`.
 
 ## Hackathon-readiness assessment
 
 A candid assessment of the repository, not a prediction of judging. The ZECATHON deadline appeared on public pages as **2026-10-28**; it was not confirmed from the official rules, which are behind a login.
 
-**Strengths:** a complete, working product with a real cryptographic and Zcash-address core; narrow privacy claims, each with a test; documentation that states what was not verified; a reproducible test suite including race tests and an independent-implementation cross-check; the code is already on GitHub.
+**Strengths:** a complete, working product with a real cryptographic and Zcash-address core; narrow privacy claims, each with a test; a real deployment with a live suite; a problem found and fixed by actually deploying (and documented honestly); documentation that says what was not verified; the code is on GitHub.
 
 **Gaps that matter before submitting**
 
-1. **Not deployed**: no live URL. Needs a Cloudflare account (`docs/DEPLOYMENT.md`).
-2. **No real wallet or payment has ever been exercised**; Zodl compatibility is unknown (R01/R02). A demo with one small real shielded payment is the most valuable missing proof.
-3. **Turnstile in the sandboxed frame is untested** and could stop creating and joining until a design choice is made.
-4. **Trusted-host draw** is a real limitation judges will notice; it is disclosed.
-5. **The official rules, licence and demo requirements were not read.**
-6. No third-party review, no screen reader, Chromium-first testing.
+1. **Nobody has created an exchange on production yet.** One person passing the real challenge closes this in about five minutes.
+2. **No real wallet or payment has ever been exercised**; Zodl compatibility is unknown (R01/R02). The scan test in `docs/ZODL_MANUAL_TEST.md` needs no money. A demo with one small real shielded payment (needs your approval and a spending limit) is the most valuable missing proof. No testnet transaction exists either.
+3. **Trusted-host draw** is a real limitation judges will notice; it is disclosed.
+4. **The official rules, licence and demo requirements were not read.**
+5. No third-party review, no screen reader, Chromium-first testing, WebKit journey failing here.
 
-**Next steps, in order:** read the official rules and confirm the deadline; designate a deployment target and deploy; run the post-deployment checks; do a small real-ZEC trial with consenting friends; record the evidence; submit.
+**Next steps, in order:** read the official rules and confirm the deadline; pass the real Turnstile on production once and create and delete a throwaway exchange; do the no-money Zodl scan test; decide on the testnet build; a small real-ZEC trial with consenting friends under a limit you set; record the evidence; submit.
