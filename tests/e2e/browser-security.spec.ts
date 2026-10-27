@@ -166,6 +166,38 @@ test.describe('browser-enforced security', () => {
     await p.ctx.close();
   });
 
+  test('the sandboxed frame\'s own script actually loads and runs in an opaque origin (no timeout allowed)', async ({ browser }) => {
+    // Found on the first real deployment: the frame is an opaque origin, so its same-site script counted as cross-origin and
+    // `Cross-Origin-Resource-Policy: same-origin` blocked it. The test above accepts "timeout" and so could not see that.
+    // With no site key the script reports an error straight away, which proves it was fetched and executed.
+    const p = await newPerson(browser);
+    const failed: string[] = [];
+    p.page.on('requestfailed', (r) => failed.push(`${r.url()} ${r.failure()?.errorText}`));
+    await p.page.goto('/privacy');
+    const message = await p.page.evaluate(
+      () =>
+        new Promise<{ type: string; reason?: string } | 'timeout'>((resolve) => {
+          const f = document.createElement('iframe');
+          f.setAttribute('sandbox', 'allow-scripts');
+          f.src = '/human-check';
+          const t = setTimeout(() => resolve('timeout'), 10_000);
+          window.addEventListener('message', (e) => {
+            if (e.source === f.contentWindow) {
+              clearTimeout(t);
+              resolve(e.data as { type: string; reason?: string });
+            }
+          });
+          document.body.appendChild(f);
+        }),
+    );
+    expect(failed.filter((f) => f.includes('human-check'))).toEqual([]);
+    expect(message).toEqual({ source: 'mummer-human-check', type: 'error', reason: 'missing-sitekey' });
+    const res = await p.page.request.get('/human-check.js');
+    expect(res.headers()['cross-origin-resource-policy']).toBe('cross-origin');
+    expect((await p.page.request.get('/')).headers()['cross-origin-resource-policy']).toBe('same-origin');
+    await p.ctx.close();
+  });
+
   test('state-changing API calls cannot be made cross-site with ambient credentials (no cookies, bearer only)', async ({ request }) => {
     const fx = await makeExchange({ members: 4, title: 'CSRF test' });
     const noAuth = await api('POST', `/api/groups/${fx.gid}/transition`, { body: { action: 'close' } });
