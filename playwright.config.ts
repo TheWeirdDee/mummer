@@ -28,12 +28,23 @@ export default defineConfig({
         ]
       : []),
   ],
-  webServer: {
-    command: 'node scripts/e2e-server.mjs',
-    url: `http://127.0.0.1:${port}/api/health`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 240_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'node scripts/e2e-server.mjs',
+      url: `http://127.0.0.1:${port}/api/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      // The separate human-check origin, served locally exactly as in production (its own Worker, its own port).
+      command: `npx wrangler dev --local --port 8789 --ip 127.0.0.1 -c workers/human-check/wrangler.toml --var PARENT_ORIGIN:http://127.0.0.1:${port}`,
+      url: 'http://127.0.0.1:8789/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
 });
