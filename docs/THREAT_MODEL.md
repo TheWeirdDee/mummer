@@ -39,6 +39,8 @@ Each row: what they can reach, attacks considered, boundaries that hold, mitigat
 
 ### 4. Malicious host
 
+_Private reveals:_ the host cannot learn a recipient-only reveal through the glass box or any other endpoint; they see only a count (D-31).
+
 - **Can see:** every nickname, wishlist and address; the pairings during the draw.
 - **Attacks:** record or leak pairings; refuse to draw; manipulate the draw (bias); delete the exchange; remove people; stage a rigged redraw.
 - **Boundary:** the host cannot read member private links, cannot open assignments after the draw (they are sealed to givers), and cannot learn who has sent or confirmed.
@@ -54,6 +56,8 @@ Each row: what they can reach, attacks considered, boundaries that hold, mitigat
 - **Tests:** authorization matrix across endpoints × roles; cross-member and cross-group denial; "no per-member state leaks" (`payments-reveal.test.ts`, `privacy-and-abuse.test.ts`).
 
 ### 6. Malicious member
+
+_Stale-request replays:_ a request that was valid for an earlier draw (a delayed "sent", acknowledgment, reveal or link replacement) cannot change a newer draw: each write is pinned to the draw version, phase and commitment it validated (D-30).
 
 _Redraw-gate griefing:_ because the draw is pinned to a members version, a member who joins and leaves repeatedly can force the host to retry. Bounded by rate limits, not prevented.
 
