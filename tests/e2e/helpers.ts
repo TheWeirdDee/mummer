@@ -21,7 +21,9 @@ export interface Person {
 export async function newPerson(browser: Browser, opts: { width?: number; height?: number; touch?: boolean } = {}): Promise<Person> {
   const ip = `198.51.100.${++ipCounter}`;
   const ctx = await browser.newContext({
-    extraHTTPHeaders: { 'cf-connecting-ip': ip },
+    // Locally each browser gets its own client address for rate limiting. Against a real Cloudflare deployment the edge rejects a
+    // request that already carries this header (Error 1000), and the real address is what limits are keyed on anyway.
+    ...(process.env.LIVE_URL ? {} : { extraHTTPHeaders: { 'cf-connecting-ip': ip } }),
     viewport: { width: opts.width ?? 1280, height: opts.height ?? 900 },
     hasTouch: opts.touch,
     reducedMotion: 'reduce',
@@ -37,6 +39,13 @@ export async function setClock(request: APIRequestContext, offsetSeconds: number
   expect(r.ok()).toBeTruthy();
 }
 
+/** On a real deployment the human check must pass before the button works; locally it is not required, so this does nothing. */
+export async function waitForHumanCheck(page: Page) {
+  if (!process.env.LIVE_URL) return;
+  await page.locator('iframe.humancheck').first().waitFor({ state: 'attached', timeout: 15_000 }).catch(() => undefined);
+  if (await page.locator('iframe.humancheck').count()) await expect(page.getByText('Check passed.')).toBeVisible({ timeout: 90_000 });
+}
+
 /** Create an exchange through the real UI. Returns the invite URL, the exchange id and the admin link. */
 export async function createExchange(page: Page, opts: { title: string; hostPlays?: boolean; cap?: number }) {
   await page.goto('/new');
@@ -44,6 +53,7 @@ export async function createExchange(page: Page, opts: { title: string; hostPlay
   if (opts.cap) await page.getByLabel('Most people allowed').fill(String(opts.cap));
   await page.getByLabel(opts.hostPlays ? /Yes, I.m playing too/ : /only organizing/).check();
   await page.getByLabel(/I understand that the draw runs in my browser/).check();
+  await waitForHumanCheck(page);
   await page.getByRole('button', { name: 'Create the exchange' }).click();
   await expect(page.getByRole('heading', { name: /Save your admin link/i, level: 2 })).toBeAttached();
   const link = await readSecretLink(page);
@@ -79,6 +89,7 @@ export async function joinExchange(page: Page, invite: string, o: { name: string
   await expect(page.getByText('This looks like a valid shielded address')).toBeVisible();
   await page.getByRole('button', { name: /Next: review/ }).click();
   await page.getByLabel(/I understand who can see my details/).check();
+  await waitForHumanCheck(page);
   await page.getByRole('button', { name: /^Join / }).click();
   await expect(page.getByRole('heading', { name: /You.re in/ })).toBeVisible();
   const link = await readSecretLink(page);
