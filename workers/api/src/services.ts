@@ -59,8 +59,11 @@ export async function verifyTurnstile(token: string, ip: string | undefined, env
     if (ip && ip !== 'unknown') form.set('remoteip', ip);
     const res = await fetch(SITEVERIFY, { method: 'POST', body: form, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return false;
-    const data = (await res.json()) as { success?: boolean; hostname?: string };
+    const data = (await res.json()) as { success?: boolean; hostname?: string; metadata?: { result_with_testing_key?: boolean } };
     if (data.success !== true) return false;
+    // Cloudflare's public TEST keys (used only by the staging deployment) answer with a placeholder hostname and say so. A test
+    // secret accepts any token anyway, so the binding adds nothing there; with a real key it always applies.
+    if (data.metadata?.result_with_testing_key === true) return true;
     // The token must have been solved on the human-check host, not on some other site that holds the same site key.
     const expected = hostOf(env.HUMAN_CHECK_ORIGIN);
     if (expected && data.hostname !== expected) return false;
