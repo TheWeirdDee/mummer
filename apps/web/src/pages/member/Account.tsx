@@ -27,7 +27,7 @@ export function Account({
   hasAssignment: boolean;
   drawn: boolean;
   /** Called after the link was replaced and the new credentials were saved on this device. The page must then ask the person to save the NEW link. */
-  onReplaced: () => void;
+  onReplaced: (next: StoredCredentials, persisted: boolean) => void;
 }) {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<'rotate' | 'leave' | 'forget' | undefined>();
@@ -43,33 +43,37 @@ export function Account({
       // An earlier attempt may have succeeded without our hearing back. Settle that first: starting a second replacement
       // with the old token would be refused and could lose the first one's new key.
       const earlier = await adoptPendingRotation(gid, creds.token);
-      if (earlier === 'adopted') {
+      if (earlier.result === 'adopted') {
         setDialog(undefined);
-        onReplaced();
+        onReplaced(earlier.creds, earlier.persisted);
         setBusy(false);
         return;
       }
-      if (earlier === 'unknown') throw new ApiError(0, 'network', 'We couldn’t check whether your earlier replacement went through. Check your connection and try again.');
+      if (earlier.result === 'unknown') throw new ApiError(0, 'network', 'We couldn’t check whether your earlier replacement went through. Check your connection and try again.');
       const c = await loadCrypto();
       const kp = await c.generateKeyPair();
       const token = c.generateToken();
       const body = {
         newTokenHash: c.hashToken(token),
         newPublicKey: c.encodeKey(kp.publicKey),
-        ...(bundle ? { newSealedBundle: c.resealAssignment(bundle, c.encodeKey(kp.publicKey)) } : {}),
+        ...(bundle ? { newSealedBundle: c.resealAssignment(bundle, c.encodeKey(kp.publicKey)), drawVersion: bundle.drawVersion } : {}),
       };
       const next: StoredCredentials = { v: 1, role: 'member', groupId: gid, memberId: mid, secretKey: c.encodeKey(kp.secretKey), token };
       // Keep the replacement on this device BEFORE asking the server: if the answer is lost we can still recover it.
-      saveRotation(gid, next);
+      // No durable copy, no replacement: otherwise a lost reply or a closed tab would leave the old link dead and the new key nowhere.
+      if (!saveRotation(gid, next)) {
+        throw new ApiError(0, 'unknown', 'This browser is not letting Mummer keep the new key on this device, so your link has NOT been replaced and still works. Allow site storage for this page (or leave private browsing) and try again.');
+      }
       requested = true;
       await api.rotate(gid, mid, creds.token, body);
-      clearRotation(gid);
       // The old link is already dead server-side. Keep the new credentials on this device, require the new link to be
-      // saved again, and let the page (which survives the credential change) show the save-your-link step.
-      saveCredentials(next);
+      // saved again, and let the page (which survives the credential change) show the save-your-link step. The pending record
+      // is dropped only once the real one is saved; if storage failed in between, the page holds the new key in memory.
+      const persisted = saveCredentials(next);
+      if (persisted) clearRotation(gid);
       clearLinkSaved('member', gid);
       setDialog(undefined);
-      onReplaced();
+      onReplaced(next, persisted);
     } catch (e) {
       const ae = e as ApiError;
       // A definite refusal means nothing changed. A lost connection is ambiguous: keep the pending replacement; the page
