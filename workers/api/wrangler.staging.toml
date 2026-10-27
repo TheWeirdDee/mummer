@@ -1,0 +1,31 @@
+#:schema node_modules/wrangler/config-schema.json
+# STAGING copy of Mummer on Cloudflare, for verifying the real deployed stack (Workers runtime, D1, headers, the cross-origin human
+# check) with Cloudflare's PUBLIC TEST Turnstile keys, which always pass, so an automated browser can run the whole journey.
+# It is a separate Worker with its own database and a different hostname. NEVER use these keys or this file for production.
+# Secrets for it (the test secret and a salt) are uploaded with `wrangler deploy --secrets-file`; see docs/DEPLOYMENT.md.
+
+name = "mummer-staging"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "../../apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mummer-staging"
+database_id = "55e8f579-66b8-4841-963b-d6bf40e10fd8"
+migrations_dir = "migrations"
+
+[observability]
+enabled = false
+
+[vars]
+ENVIRONMENT = "production"
+# Cloudflare's documented always-pass test site key (https://developers.cloudflare.com/turnstile/troubleshooting/testing/).
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+HUMAN_CHECK_ORIGIN = "https://mummer-staging-check.mummer-app.workers.dev"
+BUILD_COMMIT = "unknown"
