@@ -25,6 +25,14 @@ describe('content security policy by transport', () => {
     expect(csp).not.toContain("'unsafe-eval'");
   });
 
+  it('only the human-check script is readable cross-origin (the sandboxed frame is an opaque origin); everything else stays same-origin', () => {
+    const js = () => new Response('//', { headers: { 'content-type': 'text/javascript' } });
+    expect(applySecurityHeaders(js(), '/human-check.js').headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+    for (const p of ['/', '/human-check', '/assets/index-abc.js', '/api/health', '/favicon.svg', '/human-check.js.map']) {
+      expect(applySecurityHeaders(page(), p).headers.get('cross-origin-resource-policy'), p).toBe('same-origin');
+    }
+  });
+
   it('the human-check frame policy and the other security headers do not depend on the transport', () => {
     const a = applySecurityHeaders(page(), '/human-check', true);
     const b = applySecurityHeaders(page(), '/human-check', false);
