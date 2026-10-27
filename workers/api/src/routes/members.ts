@@ -13,7 +13,7 @@ import {
   type RevealView,
 } from '@mummer/shared';
 import { authAdminOrMember, authMember, loadGroup, pseudonymKey, type GroupRow } from '../db.js';
-import { HttpError, type AppBindings, type Env } from '../env.js';
+import { HttpError, type AppBindings, type Deps, type Env } from '../env.js';
 import { isConstraintError, isUsableX25519PublicKey } from '../keys.js';
 import { bearerToken, json, pathId, readBody } from '../http.js';
 import { consumeHumanTicket } from '../human.js';
@@ -96,22 +96,29 @@ function refuseIfJoinClosed(g: GroupRow, now: Date): void {
 
 /* ---------- Remove / leave (shared by host removal and self-leave) ---------- */
 
-export async function removeMember(env: Env, deps: { now(): Date }, g: GroupRow, mid: string): Promise<{ exception: boolean }> {
+export async function removeMember(env: Env, deps: Deps, g: GroupRow, mid: string, depth = 0): Promise<{ exception: boolean }> {
   if (g.state === 'open' || g.state === 'locked') {
-    await env.DB.batch([
+    const removal = await env.DB.batch([
       env.DB.prepare("DELETE FROM members WHERE group_id = ?1 AND id = ?2 AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state IN ('open', 'locked'))").bind(g.id, mid),
-      env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, 0)').bind(g.id, 'member_removed', dayBucket(deps.now())),
-      env.DB.prepare("UPDATE groups SET members_version = members_version + 1 WHERE id = ?1 AND state IN ('open', 'locked')").bind(g.id),
+      // Only when the row was really deleted (changes() is the DELETE's count).
+      env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) SELECT ?1, ?2, ?3, 0 WHERE changes() > 0').bind(g.id, 'member_removed', dayBucket(deps.now())),
+      // The member is gone exactly when the delete worked; if a draw won the race the member still exists and nothing moves.
+      env.DB.prepare("UPDATE groups SET members_version = members_version + 1 WHERE id = ?1 AND state IN ('open', 'locked') AND NOT EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2)").bind(g.id, mid),
     ]);
+    if (removal[0]!.meta.changes === 1) return { exception: false };
+    // Nothing was deleted: either the member was already gone (a repeated request) or a draw committed first. Decide from the real state.
+    const fresh = await loadGroup(env, deps, g.id);
+    if (fresh && fresh.state !== 'open' && fresh.state !== 'locked' && !depth) return removeMember(env, deps, fresh, mid, 1);
     return { exception: false };
   }
   if (g.state === 'closed') throw new HttpError(409, 'invalid_state', 'This exchange is closed');
   const dead = hashToken(generateId() + generateId());
   await env.DB.batch([
     env.DB.prepare("UPDATE members SET status = 'revoked', token_hash = ?3 WHERE group_id = ?1 AND id = ?2 AND status IN ('ready', 'assigned')").bind(g.id, mid, dead),
+    // Directly after the members update so changes() is its count: a repeated request writes no second event.
+    env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) SELECT ?1, ?2, ?3, ?4 WHERE changes() > 0').bind(g.id, 'member_revoked_after_draw', dayBucket(deps.now()), g.draw_version),
     env.DB.prepare('DELETE FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2').bind(g.id, mid),
     env.DB.prepare("UPDATE groups SET state = 'needs_resolution' WHERE id = ?1 AND state IN ('drawn', 'active')").bind(g.id),
-    env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, ?4)').bind(g.id, 'member_revoked_after_draw', dayBucket(deps.now()), g.draw_version),
   ]);
   return { exception: true };
 }
@@ -148,13 +155,37 @@ members.post('/:gid/members/:mid/sent', async (c) => {
   const body = await readBody(c, sentBody);
   requirePaymentPhase(group, body.drawVersion);
   if (member.status !== 'assigned') throw new HttpError(409, 'invalid_state', 'You have no assignment in this exchange');
-  await env.DB.batch([
-    env.DB.prepare("UPDATE members SET sender_state = 'user_reports_sent' WHERE group_id = ?1 AND id = ?2 AND status = 'assigned' AND sender_state = 'not_started'").bind(group.id, member.id),
+  // Every write below is pinned to the draw version and phase that were just validated, so a request that paused across a
+  // reset, a redraw or a close cannot touch the newer state.
+  const results = await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE members SET sender_state = 'user_reports_sent'
+       WHERE group_id = ?1 AND id = ?2 AND status = 'assigned' AND sender_state = 'not_started'
+         AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND draw_version = ?3 AND state IN ('drawn', 'active', 'needs_resolution'))`,
+    ).bind(group.id, member.id, body.drawVersion),
     // First payment activity ends the window in which a clean redraw is possible.
-    env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'drawn'").bind(group.id),
+    env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'drawn' AND draw_version = ?2 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?3 AND sender_state = 'user_reports_sent')").bind(group.id, body.drawVersion, member.id),
   ]);
+  if (results[0]!.meta.changes !== 1) {
+    // Either a repeat of an earlier report (fine) or the exchange moved on underneath this request (not fine).
+    const latest = await loadGroup(env, deps, group.id);
+    const mine = await env.DB.prepare('SELECT sender_state, status FROM members WHERE group_id = ?1 AND id = ?2').bind(group.id, member.id).first<{ sender_state: string; status: string }>();
+    const repeat = latest && latest.draw_version === body.drawVersion && latest.state !== 'closed' && mine?.status === 'assigned' && mine.sender_state === 'user_reports_sent';
+    if (!repeat) throw new HttpError(409, 'draw_mismatch', 'The exchange changed while you were sending that. Reload to see where things stand.');
+  }
   return json(c, { senderState: 'user_reports_sent' });
 });
+
+/**
+ * A pinned acknowledgment write changed nothing. That is fine only if this recipient is ALREADY in the requested state for the
+ * same draw (a repeated request). Otherwise the draw, the phase or the membership moved on underneath this request: refuse it.
+ */
+async function requireUnchangedOrSettled(env: Env, deps: Deps, gid: string, mid: string, drawVersion: number, wanted: 'disputed' | 'recipient_acknowledged'): Promise<void> {
+  const latest = await loadGroup(env, deps, gid);
+  const row = await env.DB.prepare('SELECT state, draw_version FROM ack_commitments WHERE group_id = ?1 AND recipient_member_id = ?2').bind(gid, mid).first<{ state: string; draw_version: number }>();
+  const settled = latest && latest.state !== 'closed' && latest.draw_version === drawVersion && row?.draw_version === drawVersion && (row.state === wanted || (wanted === 'disputed' && row.state === 'recipient_acknowledged'));
+  if (!settled) throw new HttpError(409, 'draw_mismatch', 'The exchange changed while you were confirming. Reload to see where things stand.');
+}
 
 /* ---------- POST ack (recipient acknowledgment; NOT cryptographic proof of payment) ---------- */
 
@@ -175,16 +206,22 @@ members.post('/:gid/members/:mid/ack', async (c) => {
   }>();
   if (!row || member.status !== 'assigned') throw new HttpError(409, 'invalid_state', 'You are not expecting a gift in this exchange');
 
-  const activate = env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'drawn'").bind(group.id);
+  const activate = env.DB.prepare("UPDATE groups SET state = 'active' WHERE id = ?1 AND state = 'drawn' AND draw_version = ?2").bind(group.id, body.drawVersion);
   const day = dayBucket(now);
 
   if (body.outcome === 'problem') {
     if (row.state === 'recipient_acknowledged') throw new HttpError(409, 'invalid_state', 'You already confirmed this gift.');
     if (row.state === 'disputed') return json(c, { recipientState: 'disputed', referenceMatched: false });
-    await env.DB.batch([
-      env.DB.prepare("UPDATE ack_commitments SET state = 'disputed', state_day = ?3 WHERE group_id = ?1 AND recipient_member_id = ?2 AND state = 'not_acknowledged'").bind(group.id, member.id, day),
+    const disputed = await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE ack_commitments SET state = 'disputed', state_day = ?3
+         WHERE group_id = ?1 AND recipient_member_id = ?2 AND state = 'not_acknowledged' AND commitment = ?4 AND draw_version = ?5
+           AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND draw_version = ?5 AND state IN ('drawn', 'active', 'needs_resolution'))
+           AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND status = 'assigned')`,
+      ).bind(group.id, member.id, day, row.commitment, body.drawVersion),
       activate,
     ]);
+    if (disputed[0]!.meta.changes !== 1) await requireUnchangedOrSettled(env, deps, group.id, member.id, body.drawVersion, 'disputed');
     return json(c, { recipientState: 'disputed', referenceMatched: false });
   }
 
@@ -205,12 +242,19 @@ members.post('/:gid/members/:mid/ack', async (c) => {
     matched = true;
   }
 
-  await env.DB.batch([
-    env.DB.prepare("UPDATE ack_commitments SET state = 'recipient_acknowledged', reference_matched = ?4, state_day = ?3 WHERE group_id = ?1 AND recipient_member_id = ?2 AND state IN ('not_acknowledged', 'disputed')").bind(group.id, member.id, day, matched ? 1 : 0),
+  // Pinned to the commitment that the reference was just checked against, to the draw version and to an open payment phase.
+  const acked = await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE ack_commitments SET state = 'recipient_acknowledged', reference_matched = ?4, state_day = ?3
+       WHERE group_id = ?1 AND recipient_member_id = ?2 AND state IN ('not_acknowledged', 'disputed') AND commitment = ?5 AND draw_version = ?6
+         AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND draw_version = ?6 AND state IN ('drawn', 'active', 'needs_resolution'))
+         AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND status = 'assigned')`,
+    ).bind(group.id, member.id, day, matched ? 1 : 0, row.commitment, body.drawVersion),
     // changes() is the row count of the statement above, so a concurrent duplicate request cannot double-count.
     env.DB.prepare("UPDATE stats SET value = value + 1 WHERE key = 'gifts_acknowledged' AND changes() = 1"),
     activate,
   ]);
+  if (acked[0]!.meta.changes !== 1) await requireUnchangedOrSettled(env, deps, group.id, member.id, body.drawVersion, 'recipient_acknowledged');
   const after = await env.DB.prepare('SELECT state, reference_matched FROM ack_commitments WHERE group_id = ?1 AND recipient_member_id = ?2').bind(group.id, member.id).first<{ state: string; reference_matched: number }>();
   return json(c, { recipientState: after?.state ?? 'recipient_acknowledged', referenceMatched: after?.reference_matched === 1 });
 });
@@ -224,22 +268,34 @@ members.post('/:gid/members/:mid/rotate', async (c) => {
   if (group.state === 'closed') throw new HttpError(409, 'invalid_state', 'This exchange is closed');
   const body = await readBody(c, rotateBody);
   if (!isUsableX25519PublicKey(body.newPublicKey)) throw new HttpError(422, 'validation_failed', 'Your new key could not be used. Reload the page and try again.');
-  const hasBundle = await env.DB.prepare('SELECT 1 AS x FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2').bind(group.id, member.id).first();
+  const bundleRow = await env.DB.prepare('SELECT draw_version FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2').bind(group.id, member.id).first<{ draw_version: number }>();
+  const hasBundle = bundleRow !== null;
   if (hasBundle && !body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'Your assignment must be re-sealed to your new key');
   if (!hasBundle && body.newSealedBundle) throw new HttpError(422, 'validation_failed', 'You have no assignment to re-seal');
   if (body.newTokenHash === member.token_hash) throw new HttpError(422, 'validation_failed', 'Choose a different link');
+  if (hasBundle && body.drawVersion !== bundleRow.draw_version) throw new HttpError(409, 'draw_mismatch', 'The draw changed while you were replacing your link. Reload, open your assignment and try again.');
+  const observedDraw = bundleRow?.draw_version ?? 0;
 
   const stmts: D1PreparedStatement[] = [
-    // Compare-and-swap on the current token hash: two concurrent rotations cannot both succeed.
-    env.DB.prepare('UPDATE members SET token_hash = ?3, public_key = ?4 WHERE group_id = ?1 AND id = ?2 AND token_hash = ?5').bind(group.id, member.id, body.newTokenHash, body.newPublicKey, member.token_hash),
+    // Compare-and-swap on the current token hash: two concurrent rotations cannot both succeed. It also requires that the
+    // assignment situation is exactly what this request was built for: with a bundle, the one for the same draw version;
+    // without one, still none. A draw (or reset) that committed in between makes this change nothing, so a new key can
+    // never be installed while the assignment stays sealed to the old one.
+    env.DB.prepare(
+      `UPDATE members SET token_hash = ?3, public_key = ?4
+       WHERE group_id = ?1 AND id = ?2 AND token_hash = ?5
+         AND ((?6 = 1 AND EXISTS (SELECT 1 FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2 AND draw_version = ?7))
+           OR (?6 = 0 AND NOT EXISTS (SELECT 1 FROM assignments WHERE group_id = ?1 AND giver_member_id = ?2)))`,
+    ).bind(group.id, member.id, body.newTokenHash, body.newPublicKey, member.token_hash, hasBundle ? 1 : 0, observedDraw),
   ];
   if (body.newSealedBundle) {
     stmts.push(
-      env.DB.prepare('UPDATE assignments SET sealed_bundle = ?3 WHERE group_id = ?1 AND giver_member_id = ?2 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND token_hash = ?4)').bind(group.id, member.id, body.newSealedBundle, body.newTokenHash),
+      env.DB.prepare('UPDATE assignments SET sealed_bundle = ?3 WHERE group_id = ?1 AND giver_member_id = ?2 AND draw_version = ?5 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND token_hash = ?4)').bind(group.id, member.id, body.newSealedBundle, body.newTokenHash, observedDraw),
     );
   }
   // A new public key changes what a draw in progress would seal to: move the member-list version so that draw is refused.
-  stmts.push(env.DB.prepare('UPDATE groups SET members_version = members_version + 1 WHERE id = ?1').bind(group.id));
+  // Only when this rotation actually took effect.
+  stmts.push(env.DB.prepare('UPDATE groups SET members_version = members_version + 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM members WHERE group_id = ?1 AND id = ?2 AND token_hash = ?3)').bind(group.id, member.id, body.newTokenHash));
   let results: D1Result[];
   try {
     results = await env.DB.batch(stmts);
@@ -247,7 +303,7 @@ members.post('/:gid/members/:mid/rotate', async (c) => {
     if (!isConstraintError(e)) throw e;
     throw new HttpError(409, 'conflict', 'Those credentials are already in use. Generate new ones.');
   }
-  if (results[0]!.meta.changes !== 1) throw new HttpError(409, 'conflict', 'Your credentials changed while rotating. Reload and try again.');
+  if (results[0]!.meta.changes !== 1) throw new HttpError(409, 'conflict', 'Your link or the draw changed while you were replacing it, so nothing was changed. Reload and try again.');
   return json(c, { rotated: true });
 });
 
@@ -289,11 +345,17 @@ members.post('/:gid/reveals', async (c) => {
     throw new HttpError(422, 'reference_mismatch', 'We could not match that reference to the person you named.');
   }
   try {
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO reveals (group_id, giver_member_id, recipient_member_id, audience, declared_day) VALUES (?1, ?2, ?3, ?4, ?5)').bind(group.id, member.id, body.recipientId, body.audience, dayBucket(now)),
-      env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) VALUES (?1, ?2, ?3, ?4)').bind(group.id, 'reveal_declared', dayBucket(now), group.draw_version),
+    const inserted = await env.DB.batch([
+      // Only if this is still the draw the reference was checked against (a reset and redraw in between would change who gives to whom).
+      env.DB.prepare(
+        `INSERT INTO reveals (group_id, giver_member_id, recipient_member_id, audience, declared_day)
+         SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND draw_version = ?6 AND state IN ('drawn', 'active', 'needs_resolution'))`,
+      ).bind(group.id, member.id, body.recipientId, body.audience, dayBucket(now), body.drawVersion),
+      env.DB.prepare('INSERT INTO audit_events (group_id, type, day, version) SELECT ?1, ?2, ?3, ?4 WHERE changes() > 0').bind(group.id, 'reveal_declared', dayBucket(now), group.draw_version),
     ]);
+    if (inserted[0]!.meta.changes !== 1) throw new HttpError(409, 'draw_mismatch', 'The exchange changed while you were revealing. Reload and try again.');
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     if (!isConstraintError(e)) throw e;
     throw new HttpError(409, 'conflict', 'That gift has already been revealed.');
   }
@@ -306,7 +368,12 @@ members.post('/:gid/reveals/:giverId/confirm', async (c) => {
   const auth = await authAdminOrMember(env, deps, pathId(c, 'gid'), bearerToken(c));
   if (auth.role !== 'member' || !auth.member) throw new HttpError(403, 'forbidden', 'Only the recipient can confirm a reveal');
   const giverId = pathId(c, 'giverId');
-  const r = await env.DB.prepare('UPDATE reveals SET recipient_confirmed_day = COALESCE(recipient_confirmed_day, ?4) WHERE group_id = ?1 AND giver_member_id = ?2 AND recipient_member_id = ?3').bind(auth.group.id, giverId, auth.member.id, dayBucket(deps.now())).run();
+  if (auth.group.state === 'closed') throw new HttpError(409, 'invalid_state', 'This exchange is closed, so reveals can no longer be confirmed.');
+  const r = await env.DB.prepare("UPDATE reveals SET recipient_confirmed_day = COALESCE(recipient_confirmed_day, ?4) WHERE group_id = ?1 AND giver_member_id = ?2 AND recipient_member_id = ?3 AND EXISTS (SELECT 1 FROM groups WHERE id = ?1 AND state != 'closed')").bind(auth.group.id, giverId, auth.member.id, dayBucket(deps.now())).run();
+  if (r.meta.changes !== 1) {
+    const latest = await loadGroup(env, deps, auth.group.id);
+    if (latest?.state === 'closed') throw new HttpError(409, 'invalid_state', 'This exchange is closed, so reveals can no longer be confirmed.');
+  }
   // Not the named recipient (or no such reveal): indistinguishable.
   if (r.meta.changes !== 1) throw new HttpError(404, 'not_found', 'No reveal to confirm');
   return json(c, { confirmed: true });
