@@ -17,11 +17,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     // Requests arrive without a Cloudflare client address locally; each browser context sets its own so rate limits are per person.
   },
-  // Chromium is the default and the reference run. Firefox and WebKit are run on demand: npx playwright test --project=firefox --project=webkit
+  // Chromium is the default and the reference run. Firefox and WebKit run only when asked: E2E_ALL_BROWSERS=1 npx playwright test
+  // (add --project=firefox or --project=webkit to pick one). npx playwright install firefox webkit downloads them once.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    ...(process.env.E2E_ALL_BROWSERS
+      ? [
+          { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+          { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+        ]
+      : []),
   ],
   webServer: {
     command: 'node scripts/e2e-server.mjs',
