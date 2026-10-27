@@ -283,7 +283,7 @@ describe('public endpoints', () => {
       const h = await c.get('/api/health');
       const cfg = await c.get('/api/config');
       expect(h.body).toMatchObject({ ok: true, environment: 'production', commit: 'test-commit' });
-      expect(cfg.body).toEqual({ humanCheckRequired: true, turnstileSiteKey: 'site-key-public', environment: 'production', commit: 'test-commit' });
+      expect(cfg.body).toEqual({ humanCheckRequired: true, turnstileSiteKey: 'site-key-public', humanCheckOrigin: null, environment: 'production', commit: 'test-commit' });
       for (const r of [h, cfg]) {
         expect(JSON.stringify(r.body)).not.toContain('super-secret-value');
         expect(JSON.stringify(r.body)).not.toContain('salty-secret');
@@ -400,4 +400,17 @@ describe('glass-box (host only, redacted)', () => {
     expect(r.body.neverStored.length).toBeGreaterThan(3);
     expect((await c.get(`/api/groups/${host.groupId}/glassbox`, members[0]!.token)).status).toBe(401);
   }, 60_000);
+});
+
+describe('public config: the human-check origin', () => {
+  it('is published exactly as configured and is the only addition, with no secret anywhere', async () => {
+    const w2 = await createWorld({ ENVIRONMENT: 'production', TURNSTILE_SECRET: 'super-secret-value', RATE_LIMIT_SALT: 'salty-secret', TURNSTILE_SITE_KEY: 'site-key-public', HUMAN_CHECK_ORIGIN: 'https://check.example.workers.dev' });
+    try {
+      const cfg = await w2.client().get('/api/config');
+      expect(cfg.body).toEqual({ humanCheckRequired: true, turnstileSiteKey: 'site-key-public', humanCheckOrigin: 'https://check.example.workers.dev', environment: 'production', commit: 'test-commit' });
+      expect(JSON.stringify(cfg.body)).not.toContain('super-secret-value');
+    } finally {
+      await w2.dispose();
+    }
+  });
 });
