@@ -22,3 +22,5 @@ migrations_dir = "migrations"
 ENVIRONMENT = "development"
 BUILD_COMMIT = "e2e"
 RATE_LIMIT_SALT = "e2e-salt"
+# The human-check host runs locally on its own port (a different origin from the app, as in production).
+HUMAN_CHECK_ORIGIN = "http://127.0.0.1:8789"
