@@ -18,9 +18,15 @@ export function Recover() {
   const [busy, setBusy] = useState(false);
 
   const finish = (creds: StoredCredentials) => {
-    saveCredentials(creds);
-    markLinkSaved(creds.role, creds.groupId);
-    navigate(creds.role === 'admin' ? `/g/${creds.groupId}/admin` : `/g/${creds.groupId}/m/${creds.memberId}`);
+    const path = creds.role === 'admin' ? `/g/${creds.groupId}/admin` : `/g/${creds.groupId}/m/${creds.memberId}`;
+    if (saveCredentials(creds)) {
+      markLinkSaved(creds.role, creds.groupId);
+      navigate(path);
+      return;
+    }
+    // This browser would not store the key. Carry it in the destination's fragment instead (it never reaches a server) so the
+    // page can still open, and say so there: the person has to save the link themselves.
+    void loadCrypto().then((c) => navigate(`${path}${c.buildFragment({ secretKey: c.decodeKey(creds.secretKey), token: creds.token })}`));
   };
 
   const restoreBackup = async () => {
