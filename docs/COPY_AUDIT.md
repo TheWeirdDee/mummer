@@ -42,6 +42,14 @@ Every route's headline claims, the evidence behind each, and the wording rules t
 | Invite links had no way to detect a swapped host key | Joiners could not tell | The invite carries a fingerprint; copy explains it plainly and flags its absence |
 | A wrong link overwrote a saved key silently | Could destroy someone's only key without telling them | A conflict screen asks which key to keep |
 
+| Was | Problem | Now |
+|---|---|---|
+| "If your assignment is still showing below, it still works." (needs-attention banner) | Encouraged paying someone who had left | "If the person you are giving to has left, you will see that on your gift page and should wait for the host before sending anything." |
+| "It is only shown as agreed by both people once the recipient confirms it." (reveal list) | The list shows group reveals immediately, so the sentence was false | "It appears here straight away. The line beside it says whether the recipient has confirmed it yet." |
+| Blank date fields reached date arithmetic and produced no message | A form that threw | "Choose the reveal date." / "Choose the last day people can join." |
+| (new) Payment for a removed recipient | The request stayed on screen | "<Name> has left or been removed from this exchange, so please don't send this gift. The host will sort it out with the group." |
+| (new) Replacement refused because storage is unavailable | n/a | "...your link has NOT been replaced and still works. Allow site storage for this page (or leave private browsing) and try again." |
+
 ## Not audited
 
 - Translations (English only).
