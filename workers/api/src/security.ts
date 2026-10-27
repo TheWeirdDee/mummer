@@ -7,7 +7,7 @@
  * load a third-party script is the sandboxed human-check frame (see
  * FRAME_CSP), and it runs in an opaque origin with no access to the app.
  */
-export const APP_CSP = [
+const APP_CSP_DIRECTIVES = [
   "default-src 'none'",
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self'",
@@ -20,8 +20,17 @@ export const APP_CSP = [
   "form-action 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
-].join('; ');
+];
+
+/** The app CSP as served over HTTPS (all of production): everything above plus upgrade-insecure-requests. */
+export const APP_CSP = [...APP_CSP_DIRECTIVES, 'upgrade-insecure-requests'].join('; ');
+
+/**
+ * The same policy without upgrade-insecure-requests, for the plain-HTTP loopback used in local development and tests. WebKit
+ * applies that directive even to http://127.0.0.1 and then fails every subresource with "SSL connect error", while Chromium and
+ * Firefox exempt loopback. Nothing is weakened: no policy directive is removed, and a page served over HTTPS always gets the full one.
+ */
+export const APP_CSP_PLAIN_HTTP = APP_CSP_DIRECTIVES.join('; ');
 
 /** CSP for /human-check only: Cloudflare Turnstile's script and frame. Sandboxed by the embedding iframe. */
 export const FRAME_CSP = [
@@ -39,10 +48,10 @@ export const FRAME_CSP = [
   'sandbox allow-scripts',
 ].join('; ');
 
-export function applySecurityHeaders(res: Response, pathname: string): Response {
+export function applySecurityHeaders(res: Response, pathname: string, secureTransport = true): Response {
   const headers = new Headers(res.headers);
   const isFrame = pathname === '/human-check' || pathname === '/human-check.html';
-  headers.set('Content-Security-Policy', isFrame ? FRAME_CSP : APP_CSP);
+  headers.set('Content-Security-Policy', isFrame ? FRAME_CSP : secureTransport ? APP_CSP : APP_CSP_PLAIN_HTTP);
   headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   headers.set('Referrer-Policy', 'no-referrer');
   headers.set('X-Content-Type-Options', 'nosniff');
