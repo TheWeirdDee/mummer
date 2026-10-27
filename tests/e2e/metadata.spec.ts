@@ -102,7 +102,9 @@ test.describe('no unfinished or decorative controls', () => {
       await p.page.goto(route);
       await expect(p.page.locator('h1').first()).toBeVisible();
       const text = await p.page.locator('main').innerText();
-      expect(text, route).not.toMatch(/lorem ipsum|\bTODO\b|\bTBD\b|coming soon|undefined|\[object Object\]|NaN/i);
+      expect(text, route).not.toMatch(/lorem ipsum|coming soon/i);
+      // Whole-word and case-sensitive, so "NaN" cannot match inside "financial".
+      expect(text, route).not.toMatch(/\b(TODO|TBD|undefined|NaN)\b|\[object Object\]/);
       const nameless = await p.page.$$eval('button, [role="button"]', (els) => els.filter((e) => !(e.getAttribute('aria-label') || e.textContent || '').trim()).length);
       expect(nameless, `${route}: buttons without an accessible name`).toBe(0);
       const disabledForever = await p.page.$$eval('button[disabled]', (els) => els.map((e) => (e.textContent ?? '').trim()));
