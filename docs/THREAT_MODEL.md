@@ -103,7 +103,7 @@ _Redraw-gate griefing:_ because the draw is pinned to a members version, a membe
 | Control | Where | Test |
 |---|---|---|
 | Strict CSP, no third-party script on secret-bearing pages, `wasm-unsafe-eval` for libsodium only | `workers/api/src/security.ts` | `browser-security.spec.ts`, `groups.test.ts` |
-| Human check isolated in a sandboxed, opaque-origin frame; exchanged for a single-use ticket | `apps/web/public/human-check.*`, `src/human.ts` | `groups.test.ts` (tickets), `browser-security.spec.ts` (sandbox) |
+| Human check isolated on a separate origin and exchanged for a single-use ticket; token bound to the check host; only the app may frame the check page | `workers/human-check`, `src/human.ts`, `src/services.ts` | `groups.test.ts` (tickets), `services.test.ts` (hostname), `workers/human-check/test`, `browser-security.spec.ts` (separate origin, foreign parent refused), live Turnstile control run |
 | Rate limits, fail-closed human check, fail-closed price | `src/ratelimit.ts`, `src/services.ts` | `groups.test.ts`, `services.test.ts` |
 | Atomic, idempotent state transitions (compare-and-swap in SQL) | `src/routes/*.ts` | race tests in `join-draw.test.ts`, `payments-reveal.test.ts` |
 | Bearer only (no cookies), no CORS | API design | `groups.test.ts`, `browser-security.spec.ts` |
