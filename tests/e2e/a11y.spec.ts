@@ -118,11 +118,18 @@ for (const [w, h] of [
 }
 
 test.describe('keyboard-only use', () => {
-  test('the skip link is the first stop and moves focus to the main content', async ({ browser }) => {
+  test('the skip link is the first stop and moves focus to the main content', async ({ browser, browserName }) => {
     const p = await newPerson(browser);
     await p.page.goto('/');
-    await p.page.keyboard.press('Tab');
     const skip = p.page.getByRole('link', { name: 'Skip to content' });
+    if (browserName === 'webkit') {
+      // Safari/WebKit leaves links out of the Tab order unless its preference is on (Option+Tab reaches them), and Playwright cannot
+      // press Option+Tab. So check what makes the link the first stop there: it is the first link in the document and takes focus.
+      expect(await p.page.evaluate(() => (document.querySelector('a[href]') as HTMLAnchorElement | null)?.textContent?.trim())).toBe('Skip to content');
+      await skip.focus();
+    } else {
+      await p.page.keyboard.press('Tab');
+    }
     await expect(skip).toBeFocused();
     await expect(skip).toBeVisible();
     await p.page.keyboard.press('Enter');
