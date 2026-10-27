@@ -142,3 +142,27 @@ Public searches only; **this is not trademark clearance** and a real search of t
 - Nearby marks reported by Justia (search summary): MUMMER-ABLE (live band performances, US reg. 3520299) and two SUMMER MUMMERS applications. No standalone MUMMER mark was found, but the USPTO search itself could not be used.
 - RDAP (not authoritative): mummer.com is registered (expires 2027-05-06) and redirects to a for-sale page; mummer.org is registered (2024-12-01); mummer.io, .xyz and .net looked unregistered; mummer.app was inconclusive. Nothing was bought.
 - "Mummer" is also an ordinary English word (mummers' plays and parades), which may make it a weak, descriptive-leaning mark.
+
+### Can a real wallet run in this environment? (checked 2026-10-27)
+
+No, and nothing was installed.
+
+| Check | Result |
+|---|---|
+| Zodl on Windows | No Windows build exists (iOS, Android, and a macOS Apple-silicon proof of concept only) |
+| Android emulator route | Needs an Android SDK, a system image and hardware acceleration. None of `adb`, `emulator`, `sdkmanager` or Java is installed. CPU virtualization is reported as not enabled in firmware, and enabling the Windows hypervisor features needs an elevated (administrator) session, which was not available. About 17 GB of disk and 7.8 GB of RAM are free, which is tight for an emulator image |
+| Download of the Android APK from GitHub | Possible in principle (signed APKs are published at github.com/zodl-inc/zodl-android/releases), but there is nothing to run it on here |
+| Other wallets with a Windows build | Zkool publishes a Windows .exe (6.35.0). It was **not** installed: it is a different wallet from Zodl, its ZIP 321 behaviour is unverified, and testing it would not establish Zodl compatibility |
+| Dedicated development wallet | Not created. No seed phrase or key was generated, stored or printed |
+
+What **was** done instead, and what it does and does not show:
+
+- `npm run test:crosscheck` (opt-in, needs a Rust toolchain) feeds every URI that Mummer's builder produces for up to 12 official test-vector addresses x 5 notes (empty, plain, emoji and accents, a 300-character note, and one with a newline), with five different amounts to the **reference `zip321` crate from librustzcash** and checks that it decodes the same address, amount and memo bytes, and that it rejects standard-base64 memos, over-precise amounts, negative amounts and unknown required parameters. Result: 3 of 3 tests pass. This shows that an independent implementation of the specification accepts Mummer's output. **It does not show that Zodl does.**
+- Regression tests encode the Zodl issues found in research: no `+` anywhere in a URI, exactly one recipient, memo in unpadded base64url.
+
+Manual steps that remain, in order, to establish real compatibility (needs a person with devices and a small funded wallet; no spending was done or authorised):
+
+1. Install Zodl from the App Store or Google Play on a phone, create a **new** wallet (not a personal one) and write its seed phrase on paper, never into a chat, file or screenshot.
+2. Run `npm run dev`, open http://127.0.0.1:5173 on a computer, create an exchange with a test budget and join with the wallet's **shielded** receiving address.
+3. From the member page, scan the payment QR with Zodl. Record the Zodl version, platform, and whether recipient, amount and memo were filled in and displayed correctly, and whether the review screen shows the memo.
+4. Only with a stated spending limit, send a gift of the smallest amount you accept and confirm the memo arrives and the reference matches. Record results in `docs/EVIDENCE.md` (R01 and R02).
