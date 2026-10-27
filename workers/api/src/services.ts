@@ -59,10 +59,23 @@ export async function verifyTurnstile(token: string, ip: string | undefined, env
     if (ip && ip !== 'unknown') form.set('remoteip', ip);
     const res = await fetch(SITEVERIFY, { method: 'POST', body: form, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return false;
-    const data = (await res.json()) as { success?: boolean };
-    return data.success === true;
+    const data = (await res.json()) as { success?: boolean; hostname?: string };
+    if (data.success !== true) return false;
+    // The token must have been solved on the human-check host, not on some other site that holds the same site key.
+    const expected = hostOf(env.HUMAN_CHECK_ORIGIN);
+    if (expected && data.hostname !== expected) return false;
+    return true;
   } catch {
     return false;
+  }
+}
+
+function hostOf(origin: string | undefined): string | undefined {
+  if (!origin) return undefined;
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return undefined;
   }
 }
 
