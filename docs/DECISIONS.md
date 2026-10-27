@@ -61,7 +61,7 @@ Dated 26 October 2026 unless noted. PRD v1.0 (revised) takes precedence over PRD
 
 **D-17. Commit policy.** One commit per changed file with a descriptive message (`scripts/commit-files.sh`, `scripts/commit-auto.sh`), and no co-author or attribution trailers (also recorded as a standing user instruction).
 
-**D-18. Human check.** Cloudflare Turnstile runs in a sandboxed (`sandbox="allow-scripts"`, opaque-origin) iframe at `/human-check`, the only page allowed to load a third-party script. Its token is exchanged at `/api/human/verify` for a single-use, ten-minute ticket stored hashed, consumed by creation and joining *after* validation so a typo does not burn it. In production the check is required and **fails closed** if no secret is configured. Real Turnstile has not been exercised against Cloudflare in this environment (no account or site key): see `docs/KNOWN_LIMITATIONS.md`.
+**D-18. Human check.** Cloudflare Turnstile runs in an iframe from a separate origin (see D-37; the first design used an opaque-origin sandbox at `/human-check`, which does not work). Its token is exchanged at `/api/human/verify` for a single-use, ten-minute ticket stored hashed, consumed by creation and joining *after* validation so a typo does not burn it. In production the check is required and **fails closed** if no secret is configured. The real managed challenge needs a person; an always-pass control and a staging deployment with Cloudflare's public test keys exercise the full path (see D-37 and `docs/EVIDENCE.md`).
 
 **D-19. CSP.** `script-src 'self' 'wasm-unsafe-eval'`. The latter is required to instantiate libsodium's WebAssembly; it does not enable JavaScript `eval`. No `unsafe-inline`, no third-party origins in the app policy.
 
@@ -98,6 +98,12 @@ Dated 26 October 2026 unless noted. PRD v1.0 (revised) takes precedence over PRD
 **D-35. Zod runs without just-in-time compilation** so a CSP that forbids `eval` is not reported as violated by its feature probe.
 
 **D-36. Absolute social image URLs** are completed by the Worker from the request origin, because the deployed origin is not known at build time.
+
+**D-37. The human check lives on its own origin (found on the first real deployment).** The planned isolation, an iframe with `sandbox="allow-scripts"` and so an opaque origin, passes every local test but fails against Cloudflare: Turnstile's challenge frame inherits the sandbox, gets origin "null", and Turnstile's own script discards its messages ("Ignored message from wrong origin: null", error 300030, "widget hung"). Even Cloudflare's always-pass test key never produced a token there. Putting Turnstile's script on the app's own pages would let it read the private-link fragments and keys on the join page. So the page and script moved to a separate Worker, `mummer-check` (`workers/human-check`), on its own hostname. The frame gets a real origin that is not the app's, so isolation comes from the same-origin policy instead of from a sandbox. Controls: the app's CSP frame-src names exactly that origin and no Cloudflare origin; the check page's CSP `frame-ancestors` names only the app; the frame posts only to that parent origin; the app accepts messages only from that exact origin; the client refuses a check origin equal to its own; the server accepts a token only if Cloudflare says it was solved on the check host. Local tests missed this because the check is off in development; the local E2E now runs the second Worker, and a live staging suite exercises the real stack.
+
+**D-38. Two price sources.** CoinGecko answers HTTP 403 to requests from Cloudflare Workers (found on the first deployment), so Kraken's public ticker is tried second. Both are parsed from the raw text into exact decimals with the same sanity bounds; if both fail, no quote is shown and the copy buttons remain.
+
+**D-39. A staging deployment with Cloudflare's public test keys.** A real managed challenge cannot be completed by automation, so a separate Worker, database and check host (`mummer-staging*`) use the documented always-pass keys. It exists only so the real runtime can be tested end to end automatically. Production never uses test keys; the hostname binding is skipped only for responses Cloudflare itself marks as made with a test key.
 
 ## 4. Scope not delivered (explicit)
 
