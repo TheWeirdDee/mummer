@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadCrypto } from './cryptoClient';
 import { probeToken } from './credentialRecovery';
 import { loadCredentials, saveCredentials, stripFragment, type StoredCredentials } from './session';
@@ -19,6 +19,8 @@ export type CredentialState =
 export function useCredentials(role: 'admin' | 'member', groupId: string, memberId?: string): { state: CredentialState; reload: () => void; resolveConflict: (useLink: boolean) => void } {
   const [state, setState] = useState<CredentialState>({ status: 'loading' });
   const [nonce, setNonce] = useState(0);
+  // A link the person chose that this browser would not store: used from memory, and its fragment stays in the address bar.
+  const memory = useRef<StoredCredentials | undefined>(undefined);
 
   // Pasting a private link into a tab that is already on this page only changes the fragment: pick it up.
   useEffect(() => {
@@ -37,7 +39,10 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
       let persisted = false;
       let staleLink = false;
 
-      if (hash && hash.length > 1) {
+      if (memory.current) {
+        creds = memory.current;
+        fromLink = true;
+      } else if (hash && hash.length > 1) {
         const parsed = crypto.parseFragment(hash);
         if (!parsed) {
           if (!cancelled) setState({ status: 'badlink' });
@@ -96,8 +101,12 @@ export function useCredentials(role: 'admin' | 'member', groupId: string, member
 
   const resolveConflict = (useLink: boolean) => {
     if (state.status !== 'conflict') return;
-    if (useLink) saveCredentials(state.incoming);
-    stripFragment();
+    if (useLink) {
+      if (saveCredentials(state.incoming)) stripFragment();
+      else memory.current = state.incoming; // could not be stored: keep it in memory and leave the fragment so a reload still works
+    } else {
+      stripFragment();
+    }
     setNonce((n) => n + 1);
   };
 
