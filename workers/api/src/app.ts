@@ -43,6 +43,8 @@ function buildInner(deps: Deps): Hono<AppBindings> {
     if (res.status === 200 && isHtml && !KNOWN_APP_ROUTES.test(path) && path !== '/human-check') {
       return new Response(res.body, { status: 404, headers: res.headers });
     }
+    // Social previews need absolute image URLs, and the deployed origin is not known at build time: complete them here.
+    if (isHtml && res.status === 200 && typeof HTMLRewriter !== 'undefined') return absoluteSocialImages(res, new URL(c.req.url).origin);
     return res;
   });
 
@@ -68,6 +70,17 @@ function buildInner(deps: Deps): Hono<AppBindings> {
  * Logging policy: request bodies, tokens, addresses and IPs are NEVER logged.
  * Server errors log only a route label and a stable error code.
  */
+/** Rewrites root-relative og:image and twitter:image URLs in an HTML response to absolute ones for the given origin. */
+export function absoluteSocialImages(res: Response, origin: string): Response {
+  const fix = {
+    element(el: { getAttribute(n: string): string | null; setAttribute(n: string, v: string): void }) {
+      const v = el.getAttribute('content');
+      if (v && v.startsWith('/') && !v.startsWith('//')) el.setAttribute('content', origin + v);
+    },
+  };
+  return new HTMLRewriter().on('meta[property="og:image"]', fix).on('meta[name="twitter:image"]', fix).transform(res);
+}
+
 /**
  * Diagnostics for an UNEXPECTED error (never an HttpError). Deliberately limited: method, the route with ids masked, the
  * error name, a truncated message, and the first stack frames reduced to "function (file:line)". No request body, header,
