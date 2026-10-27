@@ -91,6 +91,30 @@ describe('buildPaymentRequest', () => {
     expect(() => verifyPaymentRequest(uri, { address, amountZat: 12_345_678n, memo })).not.toThrow();
   });
 
+  // Regression guards from Zodl's public issue tracker (research of 2026-10-26, docs/INTEGRATION_RESEARCH.md): iOS issue 1420
+  // (characters such as "+" are mishandled in memos), iOS PR 1849 and Android issue 2217 (multi-recipient requests are refused or
+  // show only the first recipient). Mummer's output avoids both classes entirely.
+  it('never emits a "+" anywhere in the URI, whatever the note, label or message contains', () => {
+    for (const note of ['a+b', 'c++', '1 + 1 = 2', 'ñ+é', '+++', 'a b+c%2B']) {
+      const memo = buildGiftMemo({ reference: REF, note });
+      const uri = buildPaymentRequest({ address, amountZat: 1n, memo, label: 'a+b c', message: 'x+y z' });
+      expect(uri, note).not.toContain('+');
+      const [p] = parsePaymentRequest(uri);
+      expect(new TextDecoder().decode(p!.memo)).toBe(memo);
+      expect(p!.label).toBe('a+b c');
+    }
+  });
+
+  it('always describes exactly one recipient: no indexed parameters and a single address', () => {
+    const uri = buildPaymentRequest({ address, amountZat: 5n, memo: buildGiftMemo({ reference: REF, note: 'hi' }), label: 'Mummer gift' });
+    expect(uri.startsWith('zcash:' + address + '?')).toBe(true);
+    expect(uri).not.toMatch(/[a-z]+.d+=/i); // no address.1= / amount.1= style parameters
+    expect(uri.match(/address=/g)).toBeNull();
+    expect(parsePaymentRequest(uri)).toHaveLength(1);
+    // A second recipient smuggled into an otherwise valid request is refused by the display-time verification.
+    expect(() => verifyPaymentRequest(uri + '&address.1=' + address + '&amount.1=1', { address, amountZat: 5n, memo: buildGiftMemo({ reference: REF, note: 'hi' }) })).toThrow(/exactly one/);
+  });
+
   it('never emits +, / or = in the memo (base64url, no padding)', () => {
     for (let n = 1; n < 200; n += 7) {
       const memo = 'é'.repeat(n);
