@@ -112,21 +112,23 @@ test.describe('browser-enforced security', () => {
     await p.ctx.close();
   });
 
-  test('every document response carries the security headers; the human-check frame alone allows Cloudflare', async ({ request }) => {
+  test('every document response carries the security headers; Cloudflare is never allowed on the app itself', async ({ request }) => {
     for (const path of ['/', '/privacy', '/new', '/g/0123456789abcdef0123456789abcdef', '/nope']) {
       const r = await request.get(path);
       const h = r.headers();
       expect(h['content-security-policy'], path).toContain("default-src 'none'");
       expect(h['content-security-policy']).not.toContain('challenges.cloudflare.com');
+      expect(h['content-security-policy']).toContain("frame-src 'self' http://127.0.0.1:8789");
+      expect(h['content-security-policy']).toContain("script-src 'self' 'wasm-unsafe-eval'");
       expect(h['referrer-policy']).toBe('no-referrer');
       expect(h['x-frame-options']).toBe('DENY');
       expect(h['x-content-type-options']).toBe('nosniff');
       expect(h['strict-transport-security']).toContain('max-age=');
       expect(h['cache-control']).toBe('no-store');
     }
-    const frame = await request.get('/human-check');
-    expect(frame.headers()['content-security-policy']).toContain('challenges.cloudflare.com');
-    expect(frame.headers()['x-frame-options']).toBe('SAMEORIGIN');
+    // The app no longer serves any human-check page of its own: that lives on a separate origin.
+    expect((await request.get('/human-check')).status()).toBe(404);
+    expect((await request.get('/human-check.js')).status()).toBe(404);
     const asset = await request.get('/favicon.svg');
     expect(asset.headers()['content-security-policy']).toContain("default-src 'none'");
     // Private routes are not indexable; marketing routes are.
@@ -134,68 +136,67 @@ test.describe('browser-enforced security', () => {
     expect((await request.get('/privacy')).headers()['x-robots-tag']).toBeUndefined();
   });
 
-  test('the human-check frame is sandboxed (opaque origin) and cannot reach the app', async ({ browser }) => {
-    const p = await newPerson(browser);
-    await p.page.goto('/privacy');
-    const result = await p.page.evaluate(
-      () =>
-        new Promise<string>((resolve) => {
-          const f = document.createElement('iframe');
-          f.setAttribute('sandbox', 'allow-scripts');
-          f.src = '/human-check?sitekey=1x00000000000000000000AA';
-          const t = setTimeout(() => resolve('timeout'), 8000);
-          window.addEventListener('message', (e) => {
-            if (e.source === f.contentWindow) {
-              clearTimeout(t);
-              let access = 'blocked';
-              try {
-                // A sandboxed frame without allow-same-origin has an opaque origin: this must throw.
-                void (f.contentDocument as Document).title;
-                access = 'allowed';
-              } catch {
-                access = 'blocked';
-              }
-              resolve(`${(e.data as { type: string }).type}:${access}`);
-            }
-          });
-          document.body.appendChild(f);
-        }),
-    );
-    // Whether or not Cloudflare's script is reachable from this machine, the parent cannot read the frame.
-    expect(result.endsWith(':blocked') || result === 'timeout').toBe(true);
-    await p.ctx.close();
-  });
-
-  test('the sandboxed frame\'s own script actually loads and runs in an opaque origin (no timeout allowed)', async ({ browser }) => {
-    // Found on the first real deployment: the frame is an opaque origin, so its same-site script counted as cross-origin and
-    // `Cross-Origin-Resource-Policy: same-origin` blocked it. The test above accepts "timeout" and so could not see that.
-    // With no site key the script reports an error straight away, which proves it was fetched and executed.
+  test('the human-check frame is a separate origin: it loads and runs, reports to the app, and cannot read the app', async ({ browser }) => {
+    // Turnstile cannot finish in an opaque-origin sandbox (its challenge frame inherits the null origin), so the frame lives on its own
+    // origin instead. This runs the real second Worker on another port: it must load its script, post only to the app, and be unable
+    // to read or be read by the app. (An earlier version of this test accepted a timeout and so hid a real production failure.)
     const p = await newPerson(browser);
     const failed: string[] = [];
     p.page.on('requestfailed', (r) => failed.push(`${r.url()} ${r.failure()?.errorText}`));
     await p.page.goto('/privacy');
-    const message = await p.page.evaluate(
+    const result = await p.page.evaluate(
       () =>
-        new Promise<{ type: string; reason?: string } | 'timeout'>((resolve) => {
+        new Promise<{ origin: string; data: { type?: string; reason?: string; source?: string }; access: string } | 'timeout'>((resolve) => {
           const f = document.createElement('iframe');
-          f.setAttribute('sandbox', 'allow-scripts');
-          f.src = '/human-check';
+          f.setAttribute('sandbox', 'allow-scripts allow-same-origin'); // safe: the frame's origin is not ours
+          f.src = 'http://127.0.0.1:8789/'; // no site key: the script reports that straight away, which proves it ran
           const t = setTimeout(() => resolve('timeout'), 10_000);
           window.addEventListener('message', (e) => {
-            if (e.source === f.contentWindow) {
-              clearTimeout(t);
-              resolve(e.data as { type: string; reason?: string });
+            if (e.source !== f.contentWindow) return;
+            clearTimeout(t);
+            let access = 'blocked';
+            try {
+              void (f.contentDocument as Document).title;
+              access = 'allowed';
+            } catch {
+              access = 'blocked';
             }
+            resolve({ origin: e.origin, data: e.data, access });
           });
           document.body.appendChild(f);
         }),
     );
-    expect(failed.filter((f) => f.includes('human-check'))).toEqual([]);
-    expect(message).toEqual({ source: 'mummer-human-check', type: 'error', reason: 'missing-sitekey' });
-    const res = await p.page.request.get('/human-check.js');
-    expect(res.headers()['cross-origin-resource-policy']).toBe('cross-origin');
-    expect((await p.page.request.get('/')).headers()['cross-origin-resource-policy']).toBe('same-origin');
+    expect(failed.filter((f) => f.includes('8789'))).toEqual([]);
+    expect(result).not.toBe('timeout');
+    const r = result as { origin: string; data: { type?: string; reason?: string; source?: string }; access: string };
+    expect(r.origin).toBe('http://127.0.0.1:8789'); // the message carries the frame's own, real origin, not "null"
+    expect(r.data).toEqual({ source: 'mummer-human-check', type: 'error', reason: 'missing-sitekey' });
+    expect(r.access).toBe('blocked'); // the app cannot read the frame
+    // And the frame cannot reach the app's storage or keys: it is on a different origin.
+    expect(await p.page.evaluate(() => location.origin)).toBe('http://127.0.0.1:8788');
     await p.ctx.close();
+  });
+
+  test('only the app may embed the human-check frame: a page on any other origin is refused', async ({ browser, request }) => {
+    const header = (await request.get('http://127.0.0.1:8789/')).headers();
+    expect(header['content-security-policy']).toContain('frame-ancestors http://127.0.0.1:8788');
+    expect(header['x-frame-options']).toBeUndefined();
+    const p = await newPerson(browser);
+    // A page on an unrelated origin tries to embed the check frame.
+    await p.page.route('http://attacker.test/', (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>x</title><iframe id="f" src="http://127.0.0.1:8789/"></iframe>' }));
+    const seen: string[] = [];
+    await p.page.exposeFunction('report', (m: string) => seen.push(m));
+    await p.page.addInitScript(() => window.addEventListener('message', (e) => void (window as unknown as { report(m: string): void }).report(String(e.origin))));
+    await p.page.goto('http://attacker.test/');
+    await p.page.waitForTimeout(4000);
+    expect(seen, 'the frame must not run for a foreign parent').toEqual([]);
+    await p.ctx.close();
+  });
+
+  test('the check host serves only its page and script', async ({ request }) => {
+    expect((await request.get('http://127.0.0.1:8789/frame.js')).status()).toBe(200);
+    for (const p of ['/api/health', '/secrets', '/index.html/x']) expect((await request.get('http://127.0.0.1:8789' + p)).status(), p).toBe(404);
+    expect((await request.post('http://127.0.0.1:8789/', { data: {} })).status()).toBe(405);
   });
 
   test('state-changing API calls cannot be made cross-site with ambient credentials (no cookies, bearer only)', async ({ request }) => {
