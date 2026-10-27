@@ -238,3 +238,32 @@ describe('look-alike and invisible characters are refused in names, wishlists an
     expect(profilePlain.safeParse({ ...profile, wishlist: 'socks\nbooks 🎁' }).success).toBe(true);
   });
 });
+
+describe('strict-CSP schema configuration', () => {
+  it('turns off zod just-in-time compilation without changing what schemas accept', async () => {
+    const { configureSchemasForStrictCsp, joinBody } = await import('../src/index.js');
+    const before = joinBody.safeParse({}).success;
+    configureSchemasForStrictCsp();
+    expect(joinBody.safeParse({}).success).toBe(before);
+    expect(joinBody.safeParse({ pseudonym: 'Ada' }).success).toBe(false);
+    // After the switch, no code path may try to build a Function from a string.
+    const original = globalThis.Function;
+    let attempted = false;
+    globalThis.Function = new Proxy(original, {
+      construct() {
+        attempted = true;
+        throw new EvalError('blocked');
+      },
+      apply() {
+        attempted = true;
+        throw new EvalError('blocked');
+      },
+    });
+    try {
+      joinBody.safeParse({ pseudonym: 'Ada', publicKey: 'x' });
+    } finally {
+      globalThis.Function = original;
+    }
+    expect(attempted).toBe(false);
+  });
+});
