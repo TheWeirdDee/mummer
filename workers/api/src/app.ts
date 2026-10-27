@@ -40,7 +40,7 @@ function buildInner(deps: Deps): Hono<AppBindings> {
     const res = await c.env.ASSETS.fetch(c.req.raw);
     const path = new URL(c.req.url).pathname;
     const isHtml = res.headers.get('content-type')?.includes('text/html') ?? false;
-    if (res.status === 200 && isHtml && !KNOWN_APP_ROUTES.test(path) && path !== '/human-check') {
+    if (res.status === 200 && isHtml && !KNOWN_APP_ROUTES.test(path)) {
       return new Response(res.body, { status: 404, headers: res.headers });
     }
     // Social previews need absolute image URLs, and the deployed origin is not known at build time: complete them here.
@@ -111,7 +111,7 @@ export function createApp(deps: Deps = defaultDeps): Hono<AppBindings> {
     }
     const res = await inner.fetch(c.req.raw, c.env, ctx);
     const url = new URL(c.req.url);
-    return applySecurityHeaders(res, url.pathname, url.protocol === 'https:');
+    return applySecurityHeaders(res, url.pathname, url.protocol === 'https:', c.env.HUMAN_CHECK_ORIGIN);
   });
   return outer;
 }
