@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchPriceFromProvider, resetPriceCacheForTests, verifyTurnstile } from '../src/services.js';
+import { fetchPriceFromProvider, parseKrakenPrice, parseUsdPrice, resetPriceCacheForTests, verifyTurnstile } from '../src/services.js';
 import { HttpError, type Env } from '../src/env.js';
 import { usdCentsToZat } from '@mummer/zcash';
 
@@ -124,5 +124,42 @@ describe('Turnstile verification', () => {
     expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
     stub({ success: false, hostname: 'example.com', metadata: { result_with_testing_key: true } });
     expect(await verifyTurnstile('tok', undefined, e)).toBe(false);
+  });
+});
+
+describe('price sources', () => {
+  const KRAKEN = '{"error":[],"result":{"XZECZUSD":{"a":["1296.69000","1","1.000"],"b":["1296.00000","1","1.000"],"c":["1296.44000","0.05572753"],"v":["1","2"]}}}';
+  const env = {} as unknown as Env; // no PRICE_URL: the real provider list
+  const stubByUrl = (handlers: Record<string, () => Response>) =>
+    vi.stubGlobal('fetch', async (u: string) => {
+      const h = Object.entries(handlers).find(([k]) => String(u).includes(k));
+      if (!h) throw new Error('unexpected url ' + u);
+      return h[1]();
+    });
+  beforeEach(() => resetPriceCacheForTests());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('parses Kraken\'s last trade exactly, with the same sanity bounds', () => {
+    expect(parseKrakenPrice(KRAKEN)).toBe('1296.44000000');
+    expect(parseKrakenPrice(KRAKEN.replace('1296.44000', '0.5'))).toBeUndefined(); // below the minimum
+    expect(parseKrakenPrice(KRAKEN.replace('1296.44000', '99999'))).toBeUndefined(); // above the maximum
+    expect(parseKrakenPrice('{"error":["EQuery:Unknown asset pair"],"result":{}}')).toBeUndefined();
+    expect(parseKrakenPrice('nonsense')).toBeUndefined();
+    expect(parseUsdPrice('{"zcash":{"usd":1296.29}}')).toBe('1296.29000000');
+  });
+
+  it('uses CoinGecko first, and falls back to Kraken when CoinGecko refuses the request', async () => {
+    stubByUrl({ coingecko: () => new Response('{"zcash":{"usd":1301.45}}') });
+    expect((await fetchPriceFromProvider(env, Date.now())).source).toBe('api.coingecko.com');
+    resetPriceCacheForTests();
+    stubByUrl({ coingecko: () => new Response('forbidden', { status: 403 }), kraken: () => new Response(KRAKEN) });
+    const q = await fetchPriceFromProvider(env, Date.now());
+    expect(q.source).toBe('api.kraken.com');
+    expect(q.usdPerZec).toBe('1296.44000000');
+  });
+
+  it('fails closed when every source fails or returns something unusable', async () => {
+    stubByUrl({ coingecko: () => new Response('forbidden', { status: 403 }), kraken: () => new Response('{"error":[],"result":{}}') });
+    await expect(fetchPriceFromProvider(env, Date.now())).rejects.toMatchObject({ code: 'quote_unavailable' });
   });
 });
