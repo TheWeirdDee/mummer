@@ -18,7 +18,7 @@ binding = "DB"
 database_name = "mummer"
 # Local development uses a throwaway local database and ignores this value.
 # For deployment, run `wrangler d1 create mummer` and replace this with the returned id.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "05535e72-5553-4f5c-8fc0-b2ad920c1be6"
 migrations_dir = "migrations"
 
 [observability]
@@ -35,5 +35,5 @@ crons = ["17 3 * * *"]
 # Production by default: human check enforced, no relaxations. Local dev overrides this in .dev.vars.
 ENVIRONMENT = "production"
 # Public Turnstile site key (not secret). Set when the Turnstile widget is created.
-TURNSTILE_SITE_KEY = ""
+TURNSTILE_SITE_KEY = "0x4AAAAAAFoc3XDIit4EhqX_"
 BUILD_COMMIT = "unknown"
