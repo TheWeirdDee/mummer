@@ -32,7 +32,7 @@ Recorded at the start of the build, 26 October 2026 (before any code was written
 |---|---|
 | No ZIP 316 decoder on npm | Wrote one on audited primitives and proved it against the official vectors (`docs/INTEGRATION_RESEARCH.md`) |
 | Standard libsodium build lacks argon2 | Used audited `@noble/hashes` argon2id, validated against RFC 9106 |
-| Turnstile is a third-party script | Isolated it in a sandboxed opaque-origin frame, exchanged for single-use tickets (D-18) |
+| Turnstile is a third-party script | Isolated it on a separate origin (D-37; the first design, an opaque-origin sandbox, does not work), exchanged for single-use tickets (D-18) |
 | Commitments, row order and timestamps could correlate pairs | Keyed by role, `WITHOUT ROWID`, id-sorted submission, day-bucketed times, aggregate-only progress |
 | Hono header merging (found in testing) | Headers applied in an outer wrapper (D-08) |
 | No deploy destination or credentials | Prepared and verified everything locally; documented the exact steps and marked deployment pending |
