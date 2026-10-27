@@ -16,13 +16,13 @@ Open a private security advisory on the repository, or contact the maintainers l
 | `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` | |
 | `Referrer-Policy` | `no-referrer` | Private-link fragments are never sent; there is no Referer at all. |
 | `X-Content-Type-Options` | `nosniff` | |
-| `X-Frame-Options` | `DENY` (`SAMEORIGIN` for the human-check frame) | |
+| `X-Frame-Options` | `DENY` | The CSP `frame-src` allows `self` and exactly one more origin: the human-check host |
 | `Permissions-Policy` | camera, microphone, geolocation, payment, USB denied | |
 | `Cross-Origin-Opener-Policy` / `-Resource-Policy` | `same-origin` | |
 | `Cache-Control` | `no-store` for HTML and API; `public, max-age=31536000, immutable` for hashed `/assets/*` | |
 | `X-Robots-Tag` | `noindex, nofollow` on `/g/*`, `/new`, `/recover`, `/api/*` | Private routes are not indexable. |
 
-The **only** page allowed to load a third-party script is `/human-check`, with its own CSP permitting `challenges.cloudflare.com`. The app embeds it as `<iframe sandbox="allow-scripts">`, which gives it an opaque origin: it cannot read the app's DOM, storage, keys or fragments. The parent verifies `event.source` on the message it receives. (Tested: the parent cannot read the frame's document.)
+No page of the app may load a third-party script. Cloudflare Turnstile runs on a **separate origin**, the `mummer-check` Worker (`workers/human-check`), embedded as `<iframe sandbox="allow-scripts allow-same-origin">`. Because that origin differs from the app's, the frame cannot read the app's DOM, storage, keys or fragments (the browser's same-origin policy), and `allow-same-origin` only gives the frame its *own* real origin, which Turnstile needs. (An opaque-origin sandbox was tried first and Turnstile cannot finish in one: see decision D-37.) The app accepts a message only if `event.origin` equals the configured check origin and `event.source` is the frame; the frame posts only to the parent origin named by its own Worker, which alone may frame it (`frame-ancestors`). The server accepts a token only if Cloudflare reports it was solved on the check host. The app's CSP names no Cloudflare origin.
 
 ### Authentication and authorization
 
