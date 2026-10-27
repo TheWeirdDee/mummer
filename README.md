@@ -2,7 +2,7 @@
 
 **A privacy-focused, noncustodial Secret Santa where the gifts are small shielded Zcash payments sent from people's own wallets.**
 
-> **Status: not deployed.** There is no live URL yet: no Cloudflare destination has been designated. The source is on GitHub. Everything below describes what runs locally and what the tests show. See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for what is and isn't verified.
+> **Status: deployed on Cloudflare's free tier**, at https://mummer.mummer-app.workers.dev. Everything works on a real deployment **except one thing nobody has done yet**: creating or joining an exchange on production needs a person to pass Cloudflare's real Turnstile challenge, which automation cannot. The full journey (create, join, draw, pay request, confirm, recover, delete) was verified in a real browser on a staging copy that uses Cloudflare's public test keys. **No real wallet or payment has been tested** (not Zodl, not testnet). See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for exactly what is and is not verified.
 
 ![Landing page, desktop](docs/screenshots/landing-desktop.png)
 
@@ -53,8 +53,8 @@ npm workspaces monorepo: TypeScript 5.9, React 19 + Vite + React Router, a Cloud
 | ZIP 316 unified addresses | **Verified** against the official test vectors (60 Rev 0 and 60 Rev 2 plus F4Jumble vectors) |
 | ZIP 321 payment requests | **Verified** against the specification examples; round trips and tamper detection |
 | Zodl wallet scanning a Mummer QR | **Not verified** (needs devices and funds). The app never claims a scan prefilled anything and always offers copy buttons |
-| Real shielded payment end to end | **Not done** |
-| Cloudflare Turnstile | **Not run** (no account). The ticket flow and sandboxed frame are tested with a stub |
+| Real shielded payment end to end | **Not done.** No testnet transaction either (tooling build blocked, see `docs/INTEGRATION_RESEARCH.md`) |
+| Cloudflare Turnstile | **Partly verified.** Runs in a frame on a separate origin; verified with Cloudflare's test keys end to end on staging and with an always-pass control on production. The real managed challenge has not been completed by a person |
 
 Details: [`docs/INTEGRATION_RESEARCH.md`](docs/INTEGRATION_RESEARCH.md).
 
@@ -73,9 +73,9 @@ Full instructions (local Worker, database migrations, environment): [`docs/SETUP
 
 ```bash
 npm run typecheck
-npm test               # 395 Vitest tests: unit, API on a real D1 (Miniflare), race tests, security
+npm test               # 409 Vitest tests: unit, API on a real D1 (Miniflare), race tests, security
 npm run build
-npx playwright test    # 74 browser tests in Chromium; starts its own server on :8788
+npx playwright test    # 76 browser tests in Chromium; starts its own servers on :8788 (app) and :8789 (human-check host)
 E2E_ALL_BROWSERS=1 npx playwright test --project=firefox   # or webkit (npx playwright install firefox webkit first)
 npm run test:crosscheck # optional: parse Mummer's payment requests with the reference Rust ZIP 321 parser
 ```
@@ -84,7 +84,9 @@ What each layer proves, the test doubles in use and the load-dependent test fail
 
 ## Deployment
 
-Not deployed. Steps, required secrets and the post-deploy checklist are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Two Workers (the app and a separate human-check host) and one D1 database, on the free tier. URLs, resources, costs, secrets, the exact commands, what was verified on the live deployment and the remaining manual steps are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). A live suite runs against any deployment: `LIVE_URL=<origin> npx playwright test -c playwright.live.config.ts` (the full journey needs a deployment with Cloudflare's public test Turnstile keys: staging).
+
+To check Zodl yourself in 10 to 15 minutes without spending anything, follow [`docs/ZODL_MANUAL_TEST.md`](docs/ZODL_MANUAL_TEST.md).
 
 ## Demo and evidence
 
