@@ -85,6 +85,20 @@ Dated 26 October 2026 unless noted. PRD v1.0 (revised) takes precedence over PRD
 
 **D-29. Extend dates.** The host may change join and reveal dates before the draw; extending a locked group reopens it.
 
+**D-30. Writes are pinned to the state they validated.** Link replacement, "sent", acknowledgment, reveal and leave check state in a handler and then write in a batch. Each write now repeats the checked facts in its own SQL (draw version, an open phase, the commitment that was matched, the assignment situation) and checks the affected-row count, answering `409` for a stale request and treating an already-applied repeat as success. Found by the 27 October review; reproduced with deterministic interleaving tests (`workers/api/test/interleaving.test.ts`) before being fixed.
+
+**D-31. Private reveals stay private from the host.** The glass box and the ordinary listing apply the same audience rule. The host sees only reveals shown to the whole group, plus a count of private ones.
+
+**D-32. A link replacement needs a durable copy first.** The new key is written to this device and read back before the server is asked, kept until the real record is saved, adopted later only if the server accepts that token, and held in memory (with the link shown for saving) if storage fails. A browser that will not store it is refused up front and the old link keeps working.
+
+**D-33. Recovery never silently drops a key.** Restoring with storage blocked carries the credentials in the destination fragment; a chosen link that cannot be stored is used from memory and its fragment is kept.
+
+**D-34. The CSP drops `upgrade-insecure-requests` only for plain-HTTP loopback.** WebKit applies the directive to http://127.0.0.1 and then fails every subresource. Responses over HTTPS (all of production) carry the full policy; nothing else changes.
+
+**D-35. Zod runs without just-in-time compilation** so a CSP that forbids `eval` is not reported as violated by its feature probe.
+
+**D-36. Absolute social image URLs** are completed by the Worker from the request origin, because the deployed origin is not known at build time.
+
 ## 4. Scope not delivered (explicit)
 
 Host-blind draw (F14), independent shielded payment proof (F15), company-funded mode (F13), real-wallet verification (R01 to R03, R12), and any third-party review. See `docs/KNOWN_LIMITATIONS.md` and `docs/EVIDENCE.md`.
