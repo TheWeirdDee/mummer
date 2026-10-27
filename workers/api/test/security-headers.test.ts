@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { APP_CSP, APP_CSP_PLAIN_HTTP, applySecurityHeaders } from '../src/security.js';
+import { APP_CSP, APP_CSP_PLAIN_HTTP, appCsp, applySecurityHeaders } from '../src/security.js';
 
 const page = () => new Response('<html></html>', { headers: { 'content-type': 'text/html' } });
+const CHECK = 'https://mummer-check.example.workers.dev';
 
 describe('content security policy by transport', () => {
   it('HTTPS responses (all of production) carry the full policy including upgrade-insecure-requests', () => {
@@ -24,21 +25,35 @@ describe('content security policy by transport', () => {
     expect(csp).not.toContain('unsafe-inline');
     expect(csp).not.toContain("'unsafe-eval'");
   });
+});
 
-  it('only the human-check script is readable cross-origin (the sandboxed frame is an opaque origin); everything else stays same-origin', () => {
-    const js = () => new Response('//', { headers: { 'content-type': 'text/javascript' } });
-    expect(applySecurityHeaders(js(), '/human-check.js').headers.get('cross-origin-resource-policy')).toBe('cross-origin');
-    for (const p of ['/', '/human-check', '/assets/index-abc.js', '/api/health', '/favicon.svg', '/human-check.js.map']) {
-      expect(applySecurityHeaders(page(), p).headers.get('cross-origin-resource-policy'), p).toBe('same-origin');
+describe('the one extra frame the app may embed: the separate human-check origin', () => {
+  it('without a configured origin the app can frame only itself', () => {
+    expect(appCsp()).toContain("frame-src 'self'");
+    expect(appCsp()).not.toContain('https://');
+  });
+
+  it('with one, that exact origin is added to frame-src and nothing else about script or connect changes', () => {
+    const csp = applySecurityHeaders(page(), '/', true, CHECK).headers.get('content-security-policy')!;
+    expect(csp).toContain(`frame-src 'self' ${CHECK}`);
+    expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'"); // no third-party script on app pages
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).not.toContain('challenges.cloudflare.com'); // Cloudflare is only ever loaded by the separate origin
+    expect(csp).not.toContain('unsafe-inline');
+  });
+
+  it('no response, including the old frame path, relaxes cross-origin resource policy or sandboxes the app', () => {
+    for (const p of ['/', '/human-check', '/human-check.js', '/assets/index-abc.js', '/api/health']) {
+      const h = applySecurityHeaders(page(), p, true, CHECK).headers;
+      expect(h.get('cross-origin-resource-policy'), p).toBe('same-origin');
+      expect(h.get('content-security-policy'), p).not.toContain('sandbox');
+      expect(h.get('x-frame-options'), p).toBe('DENY');
     }
   });
 
-  it('the human-check frame policy and the other security headers do not depend on the transport', () => {
-    const a = applySecurityHeaders(page(), '/human-check', true);
-    const b = applySecurityHeaders(page(), '/human-check', false);
-    expect(a.headers.get('content-security-policy')).toBe(b.headers.get('content-security-policy'));
-    expect(a.headers.get('strict-transport-security')).toBe(b.headers.get('strict-transport-security'));
+  it('the other security headers do not depend on the transport', () => {
     expect(applySecurityHeaders(page(), '/', false).headers.get('x-frame-options')).toBe('DENY');
     expect(applySecurityHeaders(page(), '/', false).headers.get('referrer-policy')).toBe('no-referrer');
+    expect(applySecurityHeaders(page(), '/', false).headers.get('strict-transport-security')).toContain('max-age=63072000');
   });
 });
