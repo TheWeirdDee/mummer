@@ -26,7 +26,8 @@ export async function newPerson(browser: Browser, opts: { width?: number; height
     hasTouch: opts.touch,
     reducedMotion: 'reduce',
   });
-  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
+  // Only Chromium has clipboard permissions to grant; Firefox and WebKit would reject the unknown permission on the next call.
+  if (browser.browserType().name() === 'chromium') await ctx.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
   const page = await ctx.newPage();
   return { ctx, page, ip };
 }
