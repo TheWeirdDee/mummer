@@ -164,3 +164,9 @@ Test files: `U-Z` = `packages/zcash/test`, `U-C` = `packages/crypto/test`, `U-D`
 | Invisible and bidi characters rejected | **Tested** | U-S, U-Z |
 | IPv6 /64 rate-limit buckets; production salt required | **Tested** | A-hardening |
 | X25519 public key validation | **Tested** | A-hardening |
+| Writes pinned to the validated draw, phase and commitment (replacement, sent, acknowledgment, reveal, leave, confirm) | **Tested** | A-interleaving (deterministic races; 13 of 18 fail on the pre-fix code) |
+| Recipient-only reveals hidden from the host | **Tested** | A-payments-reveal, SEC |
+| Link replacement under lost replies, refusals, refreshes, several tabs, revoked credentials and storage failures | **Tested** | E-link-replacement, E-storage-failure |
+| Payment request refused for a removed recipient | **Tested** | E-review-fixes |
+| Cleared dates handled in the create form | **Tested** | E-review-fixes |
+| Page metadata, absolute social images, icons, links, no placeholder text | **Tested** | E-metadata |
