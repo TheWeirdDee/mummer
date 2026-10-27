@@ -17,7 +17,12 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     // Requests arrive without a Cloudflare client address locally; each browser context sets its own so rate limits are per person.
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Chromium is the default and the reference run. Firefox and WebKit are run on demand: npx playwright test --project=firefox --project=webkit
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
   webServer: {
     command: 'node scripts/e2e-server.mjs',
     url: `http://127.0.0.1:${port}/api/health`,
