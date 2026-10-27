@@ -9,6 +9,8 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   /** Public. Turnstile site key served to the browser through /api/config. */
   TURNSTILE_SITE_KEY?: string;
+  /** Public. Origin of the separate human-check host (the `mummer-check` Worker), for example https://mummer-check.example.workers.dev. Required in production. */
+  HUMAN_CHECK_ORIGIN?: string;
   /** Secret. Salt for hashing client addresses in rate-limit buckets. */
   RATE_LIMIT_SALT?: string;
   /** Public. Git commit of the deployed build, exposed by /api/health. */
