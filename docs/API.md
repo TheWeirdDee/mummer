@@ -42,7 +42,7 @@ Base path `/api`. JSON in and out. Source of truth: `workers/api/src/routes/*.ts
 | `POST /groups/:gid/draw` | `{drawVersion, membersVersion, closeEarly?, bundles:[{memberId, sealedBundle}], commitments:[{memberId, commitment}]}` + `Idempotency-Key`. Validates that bundles and commitments cover **exactly** the ready members; commits state, bundles, commitments and audit event in one atomic batch whose first statement is a compare-and-swap. `201 {drawVersion, replay:false}`; same key replay `200 {replay:true}`; a second draw `409 draw_already_done`. |
 | `POST /groups/:gid/transition` | `{action}`: `lock`, `reopen`, `reset_draw` (only in `drawn`; deletes assignments, commitments and reveals), `flag_resolution`, `clear_resolution`, `close`. |
 | `DELETE /groups/:gid/members/:mid` | Before the draw: deletes the member. After: revokes the token, deletes the assignment, flags `needs_resolution`. |
-| `GET /groups/:gid/glassbox` | Every row held for the group, with sealed values reduced to length + fingerprint. Sent and confirmed states appear only as totals, never per person. |
+| `GET /groups/:gid/glassbox` | Every row held for the group, with sealed values reduced to length + fingerprint. Sent and confirmed states appear only as totals, never per person. Reveals: only those the giver showed to the whole group, plus `privateRevealCount` (how many recipient-only reveals exist, never who). |
 | `DELETE /groups/:gid` | Deletes everything (cascade). |
 
 ## Member
@@ -50,12 +50,12 @@ Base path `/api`. JSON in and out. Source of truth: `workers/api/src/routes/*.ts
 | Method and path | Purpose |
 |---|---|
 | `GET /groups/:gid/members/:mid/assignment` | `{drawVersion, sealedBundle}` for that member only. Never logged. |
-| `POST .../sent` | `{drawVersion}`. Giver's self-report; idempotent; moves `drawn` to `active`. |
+| `POST .../sent` | `{drawVersion}`. Giver's self-report; idempotent; moves `drawn` to `active`. The write is pinned to that draw version and an open payment phase: a request that paused across a redraw or a close gets `409 draw_mismatch` and changes nothing. |
 | `POST .../ack` | `{drawVersion, outcome: "received"|"problem", reference?}`. Recipient only. A wrong well-formed reference is `422 reference_mismatch` and counts against 10/hour; a malformed one is `422 validation_failed` and does not. Returns `{recipientState, referenceMatched}`. Idempotent; a concurrent duplicate increments the public counter once. |
-| `POST .../rotate` | `{newTokenHash, newPublicKey, newSealedBundle?}`. Replaces a possibly leaked credential; the bundle must be re-sealed if one exists; compare-and-swap on the current token hash. |
-| `POST .../leave` | Self-removal (same semantics as host removal). |
+| `POST .../rotate` | `{newTokenHash, newPublicKey, newSealedBundle?, drawVersion?}` (`drawVersion` is the draw version of the re-sealed bundle and is required with it; a different version gets `409 draw_mismatch`). The change applies only if the member's assignment situation is still exactly what the request was built for (same bundle version, or still none), so a draw that commits in between cannot leave an assignment sealed to a discarded key; it answers `409` and changes nothing. Replaces a possibly leaked credential; the bundle must be re-sealed if one exists; compare-and-swap on the current token hash. |
+| `POST .../leave` | Self-removal (same semantics as host removal). If a draw commits while the request is in flight, the member is revoked under the post-draw rules (`exception: true`) rather than reporting a removal that did not happen. |
 | `POST /groups/:gid/reveals` | `{drawVersion, recipientId, reference, audience: "recipient"|"group"}`. Only after the reveal instant; reference must match the recipient's commitment. `201`, replay `200`, a different second reveal `409`. |
-| `POST /groups/:gid/reveals/:giverId/confirm` | The named recipient confirms. |
+| `POST /groups/:gid/reveals/:giverId/confirm` | The named recipient confirms. `409 invalid_state` once the exchange is closed. |
 | `GET /groups/:gid/reveals` | Reveals visible to the caller (group-audience, or those involving the caller). |
 
 ## State machines
