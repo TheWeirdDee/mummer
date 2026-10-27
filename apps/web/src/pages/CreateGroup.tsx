@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LIMITS, addDays, daysBetween, isValidTimezone, todayIn } from '@mummer/shared';
+import { LIMITS, addDays, daysBetween, isValidDate, isValidTimezone, todayIn } from '@mummer/shared';
 import { HumanCheck, type HumanCheckState } from '../components/HumanCheck';
 import { PageContainer } from '../components/Layout';
 import { Button, CheckField, ChoiceGroup, ErrorSummary, Notice, SelectField, TextField } from '../components/ui';
@@ -58,9 +58,14 @@ export function CreateGroup() {
     if (cents === undefined) out.push({ id: 'f-budget', message: 'Enter the budget as dollars, like 20 or 12.50.' });
     else if (cents < LIMITS.budgetMinCents || cents > LIMITS.budgetMaxCents) out.push({ id: 'f-budget', message: `Budgets run from ${formatUsd(LIMITS.budgetMinCents)} to ${formatUsd(LIMITS.budgetMaxCents)}.` });
     const today = todayIn(timezone, new Date());
-    if (joinDeadline < today) out.push({ id: 'f-join', message: 'The join deadline can’t be in the past.' });
+    // A cleared or half-typed date is not a date: say so, and do no date arithmetic on it (that throws).
+    const joinOk = isValidDate(joinDeadline);
+    const revealOk = isValidDate(revealDate);
+    if (!joinOk) out.push({ id: 'f-join', message: 'Choose the last day people can join.' });
+    else if (joinDeadline < today) out.push({ id: 'f-join', message: 'The join deadline can’t be in the past.' });
     else if (daysBetween(today, joinDeadline) > LIMITS.joinDeadlineMaxDays) out.push({ id: 'f-join', message: `Pick a join deadline within ${LIMITS.joinDeadlineMaxDays} days.` });
-    if (revealDate && joinDeadline && daysBetween(joinDeadline, revealDate) < LIMITS.revealMinGapDays) out.push({ id: 'f-reveal', message: 'The reveal date must be at least a day after the join deadline.' });
+    if (!revealOk) out.push({ id: 'f-reveal', message: 'Choose the reveal date.' });
+    else if (joinOk && daysBetween(joinDeadline, revealDate) < LIMITS.revealMinGapDays) out.push({ id: 'f-reveal', message: 'The reveal date must be at least a day after the join deadline.' });
     else if (daysBetween(today, revealDate) > LIMITS.revealMaxDays) out.push({ id: 'f-reveal', message: `Pick a reveal date within ${LIMITS.revealMaxDays} days.` });
     const cap = Number(memberCap);
     if (!Number.isInteger(cap) || cap < LIMITS.memberCapMin || cap > LIMITS.memberCapMax) out.push({ id: 'f-cap', message: `Choose a limit between ${LIMITS.memberCapMin} and ${LIMITS.memberCapMax} people.` });
