@@ -166,3 +166,28 @@ Manual steps that remain, in order, to establish real compatibility (needs a per
 2. Run `npm run dev`, open http://127.0.0.1:5173 on a computer, create an exchange with a test budget and join with the wallet's **shielded** receiving address.
 3. From the member page, scan the payment QR with Zodl. Record the Zodl version, platform, and whether recipient, amount and memo were filled in and displayed correctly, and whether the review screen shows the memo.
 4. Only with a stated spending limit, send a gift of the smallest amount you accept and confirm the memo arrives and the reference matches. Record results in `docs/EVIDENCE.md` (R01 and R02).
+
+## Zcash testnet (researched 2026-10-27; **no testnet transaction has been made**)
+
+Nothing in this section is an executed result. It records what was found and how far the setup got.
+
+### Findings (public sources; items marked "unverified" were not confirmed)
+
+- **Testnet is alive and past NU7.** NU7 activated on testnet at height 4,465,026 (about 2026-10-04, per a secondary report; Zebra's release notes confirm the height). Zebra 7.0.0 (2026-10-22) is required to follow it. Any wallet or SDK must know NU7 on testnet or it builds transactions with the wrong consensus branch id. zingolib 7.0.0 (2026-10-15) is documented as knowing NU7 testnet; whether the pinned librustzcash revision in `zcash-devtool` does is **unverified** (first sync and send would show it).
+- **Public endpoint:** `testnet.zec.rocks:443` (hard-coded as the `zecrocks` testnet server in `zcash-devtool`). It answers HTTPS 200; whether it is on the NU7 chain, and whether it is lightwalletd or Zaino, is **unverified** (no gRPC call was made).
+- **Tooling.** `zcash-devtool` (CLI, build from source, "do not use in production", Rust 1.89+) can create a testnet wallet (`wallet init -n test`), generate addresses, sync, `send` with `--memo`, `pay --payment-uri <ZIP 321>` and list memos with `list-tx`. The mnemonic is read from a prompt or stdin and never printed; keep `display-mnemonic` disabled. The age identity file passed with `-i` holds a plaintext secret line, so it must live outside the repository. `zingo-cli` (`--chain testnet`) is an alternative with no Windows build instructions. `zecwallet-light-cli` is archived (2023) and predates NU5. Zkool's testnet support is unverified.
+- **Faucets: none confirmed working.** `faucet.zecpages.com` (linked by the Zodl Android setup doc) refused connections, `testnet.zecfaucet.com` did not resolve, ZecHub's list was empty. Official docs say to ask in Discord support or "try a faucet". Getting test coins is therefore a **human step** (a faucet CAPTCHA, a Discord request, or another person sending TAZ to a testnet unified address).
+- **Address and URI formats.** ZIP 321 uses the same `zcash:` scheme on testnet; its examples use `ztestsapling1...` and `tm...`. Unified testnet addresses use a `utest1` prefix (not confirmed from a fetched source). `zcash_address` converts with a `NetworkType` argument. **Mummer's address validation is mainnet-only by design** and must not be loosened for this; testnet checks belong in an isolated harness, never in production code.
+- **Zodl:** the Android source has `zcashtestnet` and `zcashmainnet` build flavors (a testnet debug variant for development). **No official published testnet app was found**; using it means building from source in Android Studio, which needs an emulator or device.
+
+### What was set up here, and where it stopped
+
+- Official `protoc` 36.2 (the Windows build from github.com/protocolbuffers/protobuf releases) was downloaded to `C:\Users\DELL\mummer-testnet\tools\protoc`, and `zcash/zcash-devtool` (commit `0b3436b`, 2026-10-17) was cloned to `C:\Users\DELL\mummer-testnet\zcash-devtool`. Both are **outside the repository**. The Rust toolchain (1.99.1, GNU target with MSYS2 gcc) can build Rust here, as the cross-check crate already shows.
+- **The build was blocked.** The harness's auto-mode classifier refused `cargo build --release` of the freshly cloned `zcash-devtool` as "code from external" (compiling and running third-party build scripts that were just downloaded). It was not retried by another route. **No wallet was created, no key or seed was generated, and nothing was funded or sent.**
+
+### Manual steps to proceed (needs you)
+
+1. Decide whether to allow building `zcash-devtool` (it compiles a large Halo2/Sapling dependency tree and runs build scripts). If yes, either run it yourself or add a Bash permission rule for it, then: `cd C:\Users\DELL\mummer-testnet\zcash-devtool && set PROTOC=C:\Users\DELL\mummer-testnet\tools\protoc\bin\protoc.exe && cargo build --release` (expect a long first compile).
+2. Create a throwaway testnet wallet **in a terminal you control** so the seed never reaches chat or logs: `zcash-devtool wallet -w C:\Users\DELL\mummer-testnet\wallet init --name mummer-test -i C:\Users\DELL\mummer-testnet\identity.txt -n test -s zecrocks` (the empty seed prompt generates one; do not display it). Keep `identity.txt` outside the repository.
+3. `generate-address`, then request test coins for that `utest1...` address from a faucet or the Zcash Discord support channel. Any CAPTCHA is yours to complete.
+4. `sync`, `balance`, then a small shielded `send` with a memo to a second testnet address, and `list-tx` on the receiving wallet to read the memo. Record network, versions, transaction ids and block heights here and in `docs/EVIDENCE.md`. A successful testnet send shows that the transaction primitives work; it is **not** evidence of Zodl compatibility.
