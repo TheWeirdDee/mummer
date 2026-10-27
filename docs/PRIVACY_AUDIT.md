@@ -10,7 +10,7 @@ A check of what each party can learn, against what the product says. Method: rea
 | The database never holds them either | Every stored value after a full exchange is scanned; sealed blobs must not contain the plaintext; lengths are bucketed to 256 bytes |
 | Private-link secrets (`#k=`, `#t=`) never leave the browser in a URL, header, referrer or request body (in the flows listed) | A real browser records all traffic while a member opens their link, marks a gift sent, opens the "My link" and "A gift for you" tabs, and confirms receipt (create, join, recovery and link replacement are not covered by a traffic recording) |
 | Local storage keeps this device's key but no plaintext address, wishlist or assignment | Storage is inspected after joining |
-| No third-party origin is contacted | Same traffic recording; the only exception is the sandboxed human-check frame |
+| No third-party origin is contacted | Same traffic recording; the only exception is the separate-origin human-check frame (and Cloudflare inside it) |
 | The only table linking two members is `reveals`, written after the giver's consent and proof | Schema and row scans |
 | Member-level times are day buckets; audit events carry no actor after the draw | Row scans |
 | Progress and the host's glass box show totals, never per person | API response shape tests |
