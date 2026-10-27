@@ -148,6 +148,8 @@ export const rotateBody = z
     newTokenHash: hex64,
     newPublicKey: key32,
     newSealedBundle: b64url(40, LIMITS.sealedBundleMaxChars).optional(),
+    /** The draw version of the bundle that was re-sealed. Required with newSealedBundle so an old bundle can never overwrite a newer draw's. */
+    drawVersion: z.number().int().min(1).max(1000).optional(),
   })
   .strict();
 export type RotateBody = z.infer<typeof rotateBody>;
