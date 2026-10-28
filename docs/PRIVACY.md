@@ -42,6 +42,8 @@ Mummer helps keep gift payments shielded on Zcash, while limiting what the organ
 
 **Not stored anywhere:** IP addresses in the database, request bodies in logs, analytics, cookies, advertising or session-replay identifiers. No third-party script loads on any page of the app. On create and join, a frame from a separate origin (the `mummer-check` Worker) loads Cloudflare Turnstile; that origin cannot read the app, and Cloudflare can see the visitor's connection and browser signals as any Turnstile deployment can.
 
+**Seen in transit, not stored:** (1) When a recipient types the gift reference from the memo to confirm a gift, the reference is sent to the server, which compares its hash with the stored fingerprint and discards it. The server cannot tell which giver the reference belongs to (it lives only in the giver's sealed assignment and in the host's browser at the draw), so this adds nothing to what it already knows; it is listed here because the reference is otherwise kept sealed. (2) On create and join, the Worker passes the visitor's IP address and the Turnstile token to Cloudflare's verification API, as Turnstile's documentation describes. The deployed instance was scanned for both (`tests/live/privacy-scan.spec.ts`; results in `docs/EVIDENCE.md`).
+
 **On the user's device:** the person's key and token in local storage (so they can return), non-secret form drafts in session storage (the address is deliberately **not** kept in a draft), a pending link replacement while one is in flight, and, if they choose, their local reveal-day guess. "Forget this device" removes all of these.
 
 ## Metadata controls
