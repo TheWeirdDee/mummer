@@ -15,7 +15,7 @@ export function Privacy() {
 
       <Notice tone="warn" title="The host's browser runs the draw">
         <p>
-          In this version the draw happens in the host&rsquo;s browser, so a host who wants to can see every pairing. Mummer&rsquo;s server never learns them. If that matters to your group, choose a host who isn&rsquo;t taking part. A draw that even the host can&rsquo;t see needs a reviewed cryptographic protocol that
+          In this version the draw happens in the host&rsquo;s browser, so a host who wants to can see every pairing. Mummer&rsquo;s server never learns them from the draw. The one exception is a reveal that a giver chooses to make: then the server stores that one pair, as described in the table below. If that matters to your group, choose a host who isn&rsquo;t taking part. A draw that even the host can&rsquo;t see needs a reviewed cryptographic protocol that
           we haven&rsquo;t built, so we don&rsquo;t claim it.
         </p>
       </Notice>
@@ -38,7 +38,7 @@ export function Privacy() {
             </tr>
             <tr>
               <th scope="row">Mummer&rsquo;s server and database</th>
-              <td>Group name, nicknames, budget, dates, counts, and sealed data it can&rsquo;t open. Stored times are whole days.</td>
+              <td>Group name, nicknames, budget, dates, counts, and sealed data it can&rsquo;t open. Stored times are whole days, except the exchange&rsquo;s own deadline and expiry instants and the short-lived rate-limit records.</td>
               <td>Wallet addresses, wishlists, memos, keys, and who drew whom (except a pair a giver chooses to reveal).</td>
               <td>Your IP address and request timing, like any website. A malicious operator could serve altered code.</td>
             </tr>
@@ -111,7 +111,7 @@ export function Privacy() {
 
         <h2>How long we keep things</h2>
         <p>
-          An exchange and everything attached to it is deleted 30 days after its reveal date, or immediately if the host deletes it. Rate-limit records (salted hashes) are kept for under two hours. Counters on the <Link to="/stats">public counts</Link> page contain no group or person identifiers.
+          An exchange and everything attached to it is deleted 30 days after its reveal date, or immediately if the host deletes it. Rate-limit records (salted hashes) become eligible for removal after two hours, but cleanup runs once a day, so one can remain for up to about a day. Counters on the <Link to="/stats">public counts</Link> page contain no group or person identifiers.
         </p>
 
         <h2>Reducing your own exposure</h2>
