@@ -37,7 +37,7 @@ Mummer helps keep gift payments shielded on Zcash, while limiting what the organ
 | Consented reveal (giver, recipient, audience) | `reveals` | Clear, only after the giver consented and proved it | Same |
 | Group-level events | `audit_events` | Event name + day; no actor after the draw | Same |
 | Aggregate counters | `stats` | Three numbers, no identifiers | Indefinite (anonymous) |
-| Rate-limit buckets | `rate_limits` | Salted hash of (scope, client address) + count | Pruned after about two hours |
+| Rate-limit buckets | `rate_limits` | Salted hash of (scope, client address) + count | Records older than two hours are pruned by a daily job, so one can remain for up to about 26 hours |
 | Human-check tickets | `human_tickets` | Hash | Ten minutes |
 
 **Not stored anywhere:** IP addresses in the database, request bodies in logs, analytics, cookies, advertising or session-replay identifiers. No third-party script loads on any page of the app. On create and join, a frame from a separate origin (the `mummer-check` Worker) loads Cloudflare Turnstile; that origin cannot read the app, and Cloudflare can see the visitor's connection and browser signals as any Turnstile deployment can.
