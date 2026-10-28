@@ -41,7 +41,7 @@ Layered, and honest about what each layer does and does not prove. Counts below 
 ## Running
 
 ```bash
-npm run typecheck && npm test       # Vitest (21 files, 409 tests)
+npm run typecheck && npm test       # Vitest (22 files, 416 tests)
 LIVE_URL=https://<staging> npx playwright test -c playwright.live.config.ts   # the real Cloudflare stack (see below)
 npm run test:unit                   # package tests only (176)
 npm run test:crosscheck             # reference Rust ZIP 321 parser (needs Rust; opt-in)
