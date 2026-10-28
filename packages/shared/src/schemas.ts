@@ -46,6 +46,12 @@ export const cleanMultiline = (max: number, label: string) =>
         .refine((s) => ![...s].some((ch) => ch !== '\n' && hasControlCharacter(ch)), `${label} contains characters that are not allowed`),
     );
 
+/** A sealed profile or bundle: base64url of exactly one fixed ciphertext length (see LIMITS.sealedChars). */
+export const sealedB64 = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]+$/, 'must be base64url')
+  .length(LIMITS.sealedChars, 'Your copy of Mummer is out of date. Reload the page and try again.');
+
 export const b64url = (minChars: number, maxChars: number) =>
   z
     .string()
@@ -94,7 +100,7 @@ export const joinBody = z
     pseudonym: cleanText(LIMITS.pseudonymMin, LIMITS.pseudonymMax, 'Display name'),
     publicKey: key32,
     tokenHash: hex64,
-    sealedProfile: b64url(40, LIMITS.sealedProfileMaxChars),
+    sealedProfile: sealedB64,
     /** SHA-256 fingerprint of the registered address; givers check their assignment against it (see addressCommitment). */
     addressCommitment: hex64,
     humanTicket,
@@ -109,7 +115,7 @@ export const drawBody = z
     membersVersion: z.number().int().min(0).max(1_000_000),
     closeEarly: z.boolean().optional(),
     bundles: z
-      .array(z.object({ memberId: id32, sealedBundle: b64url(40, LIMITS.sealedBundleMaxChars) }).strict())
+      .array(z.object({ memberId: id32, sealedBundle: sealedB64 }).strict())
       .min(LIMITS.minMembersToDraw)
       .max(LIMITS.memberCapMax),
     commitments: z
@@ -147,7 +153,7 @@ export const rotateBody = z
   .object({
     newTokenHash: hex64,
     newPublicKey: key32,
-    newSealedBundle: b64url(40, LIMITS.sealedBundleMaxChars).optional(),
+    newSealedBundle: sealedB64.optional(),
     /** The draw version of the bundle that was re-sealed. Required with newSealedBundle so an old bundle can never overwrite a newer draw's. */
     drawVersion: z.number().int().min(1).max(1000).optional(),
   })
