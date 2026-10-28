@@ -24,9 +24,12 @@ export const LIMITS = {
   revealMinGapDays: 1,
   /** Groups are purged this many days after the reveal date. */
   retentionDaysAfterReveal: 30,
-  /** Encoded sizes (base64url characters). */
-  sealedProfileMaxChars: 8_192,
-  sealedBundleMaxChars: 12_288,
+  /**
+   * Every sealed profile and every sealed assignment bundle is exactly this many base64url characters: (4096 + 48) bytes, see SEALED_BYTES in
+   * packages/crypto/src/seal.ts (a test keeps them equal). The server accepts only this length, so a client that still seals to the old
+   * 256-byte buckets, whose stored lengths used to give pairings away, is refused instead of silently stored.
+   */
+  sealedChars: 5_526,
   /** Wrong-reference attempts allowed per recipient per hour. */
   ackAttemptsPerHour: 10,
 } as const;
