@@ -7,7 +7,7 @@ A check of what each party can learn, against what the product says. Method: rea
 | Property | How it is checked |
 |---|---|
 | The server never receives a plaintext address, wishlist, memo, assignment edge, secret key, seed or viewing key | Every request body of a full exchange is scanned for the plaintext values that were typed in |
-| The database never holds them either | Every stored value after a full exchange is scanned; sealed blobs must not contain the plaintext; lengths are bucketed to 256 bytes |
+| The database never holds them either | Every stored value after a full exchange is scanned; sealed blobs must not contain the plaintext; every sealed blob has the same fixed length (changed on 28 October 2026 from 256-byte buckets, which leaked pairings) |
 | Private-link secrets (`#k=`, `#t=`) never leave the browser in a URL, header, referrer or request body (in the flows listed) | A real browser records all traffic while a member opens their link, marks a gift sent, opens the "My link" and "A gift for you" tabs, and confirms receipt (create, join, recovery and link replacement are not covered by a traffic recording) |
 | Local storage keeps this device's key but no plaintext address, wishlist or assignment | Storage is inspected after joining |
 | No third-party origin is contacted | Same traffic recording; the only exception is the separate-origin human-check frame (and Cloudflare inside it) |
@@ -40,7 +40,7 @@ A check of what each party can learn, against what the product says. Method: rea
 3. **Hosting and network providers see connections** (IP, timing). Cloudflare's own logging and retention were not inspected (gate R09), and the copy makes no claim about it.
 4. **Small groups leak by deduction** (four people can narrow the cycle); five or more is recommended.
 5. **A giver knows their recipient** and a recipient can guess their giver from timing, amount or a note.
-6. **Sealed-blob sizes are bucketed, not constant**, so a very long wishlist can hint at its length.
+6. **Sealed-blob sizes were bucketed, not constant, and that was exploitable**: an independent audit on 28 October 2026 recovered every pairing from stored lengths. Fixed with a single fixed size; see `docs/PRIVACY_RELEASE_AUDIT.md`.
 7. **The address commitment is a one-way hash, but it can confirm a guessed address.** It is stored next to the nickname.
 8. **Redraw gating can be griefed** by repeated joining and leaving; rate limits bound it.
 9. **Self-reported states** ("sent", "received") are not verified.
