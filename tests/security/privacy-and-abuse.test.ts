@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { encodeKey, generateReference, generateToken, hashToken, normalizeReference, ackCommitment } from '@mummer/crypto';
+import { LIMITS } from '@mummer/shared';
 import {
   createGroup,
   createWorld,
@@ -259,7 +260,7 @@ describe('replay, forgery and cross-context attacks', () => {
     const c = w.client();
     const host = await createGroup(c);
     const key = encodeKey(host.keys.publicKey);
-    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: 'Mallory', publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(300) });
+    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: 'Mallory', publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(LIMITS.sealedChars) });
     expect(r.status).toBe(201);
     const prof = await c.get(`/api/groups/${host.groupId}/profiles`, host.token);
     expect(prof.status).toBe(200);
@@ -275,7 +276,7 @@ describe('injection and input hostility', () => {
     const key = encodeKey(host.keys.publicKey);
     const nasty = ["'; DROP TABLE members;--", '" OR 1=1 --', 'Robert\');DELETE FROM groups;--', '%_\\'];
     for (const [i, n] of nasty.entries()) {
-      const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: n, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(100 + i) });
+      const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: n, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(LIMITS.sealedChars) });
       expect(r.status).toBe(201);
     }
     const g = await c.get(`/api/groups/${host.groupId}`, host.token);
@@ -293,7 +294,7 @@ describe('injection and input hostility', () => {
     const host = await createGroup(c);
     const key = encodeKey(host.keys.publicKey);
     const payload = '<img src=x onerror=alert(1)>';
-    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: payload, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(100) });
+    const r = await c.post(`/api/groups/${host.groupId}/members`, { pseudonym: payload, publicKey: key, tokenHash: hashToken(generateToken()), addressCommitment: 'c'.repeat(64), sealedProfile: 'A'.repeat(LIMITS.sealedChars) });
     expect(r.status).toBe(201);
     const res = await c.get(`/api/groups/${host.groupId}`, host.token);
     expect(res.headers.get('content-type')).toContain('application/json');
