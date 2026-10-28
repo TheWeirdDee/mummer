@@ -1,6 +1,6 @@
 # Demo video
 
-A 3 minute 27 second video of the real app, recorded in a real Chromium window with captions drawn into the page and a voiceover from Windows' built-in speech engine (SAPI, voice "Microsoft David"). Nothing is simulated or composited: every screen is the app responding to real clicks.
+A 1 minute 47 second video (cut from a 3 minute 27 second full recording to meet a two-minute limit) of the real app, recorded in a real Chromium window with captions drawn into the page and a voiceover from Windows' built-in speech engine (SAPI, voice "Microsoft David"). Nothing is simulated or composited: every screen is the app responding to real clicks.
 
 ## What it shows, and on what
 
@@ -49,6 +49,10 @@ ffmpeg -i mummer-demo-raw.webm -i narration.wav \
 ```
 
 Edit the scenes and their narration in `tests/live/demo-video.spec.ts`. The recorder deletes its own exchange at the end.
+
+## The two-minute cut
+
+The submission video is a cut of the same real recording: each scene's footage window is sped up where an action takes longer than its narration (typing, page loads), a few repeated scenes are dropped, and the narration was rewritten shorter and re-voiced with the same SAPI voice. Nothing is added that was not recorded. The cut was made with a throwaway script outside the repository (windows from `timeline.json`, one `ffmpeg` filter graph). The full-length version contains the narration for the scenes the cut drops.
 
 ## Upload
 
