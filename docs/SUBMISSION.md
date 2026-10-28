@@ -49,8 +49,8 @@ Details: `docs/ARCHITECTURE.md`, `docs/CRYPTOGRAPHIC_DESIGN.md`, `docs/PRIVACY_A
 - Reveals are consent-gated; public statistics are thresholded.
 
 **Not protected (stated in the app and in the repository):**
-- **The draw is trusted-host.** The host's browser opens everyone's details to run the draw and could see who draws whom. A host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
-- A malicious operator who serves altered JavaScript could read secrets or swap addresses. Address commitments and a host-key fingerprint in the invite detect database-only swaps, not this.
+- ****An earlier version leaked pairings through stored sealed-blob lengths; that is fixed (see above), but the fix is days old and has had no independent review.** The draw is trusted-host.** The host's browser opens everyone's details to run the draw and could see who draws whom. A host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
+- A malicious operator who serves altered JavaScript could read secrets or swap addresses. The host-key fingerprint in the invite detects a swapped host key, and each address commitment lets the host and giver notice a profile changed in isolation, but the commitment is a public hash with no member signature behind it: someone who can write to the database can replace a profile and its commitment together without detection. Neither protects against altered JavaScript.
 - Hosting and network providers see connections. In groups under five people, deduction leaks.
 - "Sent" and "received" are self-reports; no independent proof of payment.
 
@@ -82,7 +82,7 @@ Run history and the runs that were not clean: `docs/EVIDENCE.md`. Summary:
 | Live production | Read-only suite passed; headers, CSP, framing rules, 404s, social image, price, health |
 | Live staging | Full journey (create, join, draw, assignment, payment request, sent, confirm, recover, delete) passed in a real browser |
 | Real Turnstile on production | A person completed the real challenge and created an exchange; the production database holds 2 exchanges and 0 members (read-only count, 28 Oct 2026). **Joining with the real challenge has not been recorded yet** |
-| Privacy release audit | A deployed-instance scan of every request and response in a five-person journey found no secret on the wire, no third-party origin beyond the human-check host and Cloudflare's challenge, and no cross-person data in 55 replays; no confirmed critical or high finding. One wording over-claim was found and corrected. Limits and findings: `docs/PRIVACY_RELEASE_AUDIT.md` |
+| Privacy audits | Two audits on 28 October 2026. A deployed-instance scan found no secret on the wire, no third-party origin beyond the human-check host and Cloudflare's challenge, and no cross-person data in 55 replays; it also found a wording over-claim (corrected). An **independent audit found a critical leak the first one missed**: sealed-blob lengths (256-byte buckets) let a database observer match every giver to a recipient when wishlists differed in length. It was fixed the same day (one fixed 4096-byte size for every sealed payload), deployed to staging and production, and re-verified live: all sealed blobs on the wire have one length. Limits and findings: `docs/PRIVACY_RELEASE_AUDIT.md`, decision D-40 |
 | Dependencies | `npm audit` reports 0 vulnerabilities |
 | Fresh mainnet address | A new mainnet unified address (Orchard and Sapling receivers only) was made with the Zcash Foundation's maintained `zcash_keys` 0.17 crate from a throwaway in-memory seed that was never printed or stored (`tools/test-address`). It is accepted by Mummer's address policy and has never been funded |
 
