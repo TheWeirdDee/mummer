@@ -23,7 +23,7 @@ Gift exchanges have a privacy problem. On most blockchains every payment is publ
 Mummer is a noncustodial organiser built around shielded Zcash:
 
 1. **A host starts an exchange**: a name, a budget, two dates and one invite link.
-2. **Everyone joins** with a nickname, an optional wishlist and a fresh shielded address from their own wallet. Mummer checks the address with a real ZIP 316 decoder and refuses transparent, testnet and malformed addresses with a reason. The details are sealed in the browser before anything is sent.
+2. **Everyone joins** with a nickname, an optional wishlist and a fresh shielded address from their own wallet. Mummer checks the address with a real ZIP 316 decoder and refuses transparent, testnet and malformed addresses with a reason. The wishlist and address are sealed in the browser before anything is sent; the nickname is visible to the group and to Mummer's server.
 3. **The host's browser draws the names** as a single cycle, so nobody draws themselves, and seals each person's assignment so only that person can open it.
 4. **Each giver sees a ZIP 321 payment request**: a QR, plus address, amount and memo as copyable fields, with a checklist for the moment of approval. The giver's own wallet shows the request and the giver approves and sends. Mummer never touches funds.
 5. **Recipients report what arrived, and on reveal day givers may choose to unmask.** These are self-reports. Mummer cannot see a shielded payment and never labels anything "verified".
@@ -44,7 +44,7 @@ Details: `docs/ARCHITECTURE.md`, `docs/CRYPTOGRAPHIC_DESIGN.md`, `docs/PRIVACY_A
 ## Privacy model (what is and is not hidden)
 
 **Protected, and tested by scanning every request and every stored value:**
-- Mummer's server and database cannot read addresses, wishlists or pairings; they hold sealed blobs of identical padded length, hashes and day-level dates.
+- Mummer's server and database cannot read addresses, wishlists or pairings; they hold sealed blobs of identical padded length, hashes and day-level dates. They **can** read the exchange name, nicknames, budget, dates, counts and request metadata (IP address, timing), as `docs/THREAT_MODEL.md` states. When a recipient types the memo reference to confirm a gift, that reference is sent to the server for a hash comparison; the server never learns which giver it belongs to.
 - The host's "glass box" page shows exactly what the server stores, as sizes and fingerprints.
 - Reveals are consent-gated; public statistics are thresholded.
 
@@ -82,6 +82,7 @@ Run history and the runs that were not clean: `docs/EVIDENCE.md`. Summary:
 | Live production | Read-only suite passed; headers, CSP, framing rules, 404s, social image, price, health |
 | Live staging | Full journey (create, join, draw, assignment, payment request, sent, confirm, recover, delete) passed in a real browser |
 | Real Turnstile on production | A person completed the real challenge and created an exchange; the production database holds 2 exchanges and 0 members (read-only count, 28 Oct 2026). **Joining with the real challenge has not been recorded yet** |
+| Privacy release audit | A deployed-instance scan of every request and response in a five-person journey found no secret on the wire, no third-party origin beyond the human-check host and Cloudflare's challenge, and no cross-person data in 55 replays; no confirmed critical or high finding. One wording over-claim was found and corrected. Limits and findings: `docs/PRIVACY_RELEASE_AUDIT.md` |
 | Dependencies | `npm audit` reports 0 vulnerabilities |
 | Fresh mainnet address | A new mainnet unified address (Orchard and Sapling receivers only) was made with the Zcash Foundation's maintained `zcash_keys` 0.17 crate from a throwaway in-memory seed that was never printed or stored (`tools/test-address`). It is accepted by Mummer's address policy and has never been funded |
 
