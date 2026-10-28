@@ -105,6 +105,8 @@ Dated 26 October 2026 unless noted. PRD v1.0 (revised) takes precedence over PRD
 
 **D-39. A staging deployment with Cloudflare's public test keys.** A real managed challenge cannot be completed by automation, so a separate Worker, database and check host (`mummer-staging*`) use the documented always-pass keys. It exists only so the real runtime can be tested end to end automatically. Production never uses test keys; the hostname binding is skipped only for responses Cloudflare itself marks as made with a test key.
 
+**D-40. One fixed size for every sealed payload (28 October 2026).** An independent audit showed that padding to 256-byte buckets was not enough: a giver's assignment bundle contains the recipient's nickname, wishlist and address, so its stored length equals the recipient's profile length plus a known constant, and anyone who sees stored lengths could match every giver to a recipient when wishlists differed in length. All sealed payloads are now padded to 4096 bytes (worst case the schemas allow is about 2.6 KB), anything larger is rejected, and only one ciphertext length is accepted when opening. The earlier choice of buckets was documented as leaking "a hint about wishlist length"; it also leaked pairings, which was missed by the project's own tests and review.
+
 ## 4. Scope not delivered (explicit)
 
 Host-blind draw (F14), independent shielded payment proof (F15), company-funded mode (F13), real-wallet verification (R01 to R03, R12), and any third-party review. See `docs/KNOWN_LIMITATIONS.md` and `docs/EVIDENCE.md`.
