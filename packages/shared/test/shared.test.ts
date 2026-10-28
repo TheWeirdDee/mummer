@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LIMITS,
   addDays,
   ackBody,
   bundlePlain,
@@ -161,7 +162,7 @@ describe('request schemas', () => {
   });
 
   it('join: counts display-name length in code points, not UTF-16 units', () => {
-    const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(100), addressCommitment: hash };
+    const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(LIMITS.sealedChars), addressCommitment: hash };
     expect(joinBody.safeParse({ ...base, pseudonym: '🎅🎅' }).success).toBe(true);
     expect(joinBody.safeParse({ ...base, pseudonym: '🎅' }).success).toBe(false);
     expect(joinBody.safeParse({ ...base, pseudonym: 'a'.repeat(33) }).success).toBe(false);
@@ -170,7 +171,7 @@ describe('request schemas', () => {
   });
 
   it('draw: requires at least 4 bundles and commitments, rejects extra fields', () => {
-    const b = (n: number) => Array.from({ length: n }, (_, i) => ({ memberId: String(i).repeat(32).slice(0, 32).replace(/[^0-9a-f]/g, 'a'), sealedBundle: 'y'.repeat(60) }));
+    const b = (n: number) => Array.from({ length: n }, (_, i) => ({ memberId: String(i).repeat(32).slice(0, 32).replace(/[^0-9a-f]/g, 'a'), sealedBundle: 'y'.repeat(LIMITS.sealedChars) }));
     const c = (n: number) => Array.from({ length: n }, (_, i) => ({ memberId: String(i).repeat(32).slice(0, 32).replace(/[^0-9a-f]/g, 'a'), commitment: hash }));
     expect(drawBody.safeParse({ drawVersion: 1, membersVersion: 3, bundles: b(4), commitments: c(4) }).success).toBe(true);
     expect(drawBody.safeParse({ drawVersion: 1, membersVersion: 3, bundles: b(3), commitments: c(4) }).success).toBe(false);
@@ -214,7 +215,7 @@ describe('sealed payload schemas', () => {
 });
 
 describe('look-alike and invisible characters are refused in names, wishlists and memo notes', () => {
-  const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(100), addressCommitment: hash };
+  const base = { publicKey: key, tokenHash: hash, sealedProfile: 'x'.repeat(LIMITS.sealedChars), addressCommitment: hash };
   const joined = (pseudonym: string) => joinBody.safeParse({ ...base, pseudonym }).success;
 
   it.each([
