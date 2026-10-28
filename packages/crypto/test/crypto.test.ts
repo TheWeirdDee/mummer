@@ -20,6 +20,8 @@ import {
   openAssignment,
   openBackup,
   openBytes,
+  MAX_PLAINTEXT_BYTES,
+  SEALED_BYTES,
   openPayload,
   openProfile,
   parseFragment,
@@ -104,7 +106,7 @@ describe('sealed boxes', () => {
   });
 
   it('round-trips arbitrary bytes, including empty and unicode', () => {
-    for (const text of ['', 'hello', 'héllo wörld 🎁', 'x'.repeat(5000)]) {
+    for (const text of ['', 'hello', 'héllo wörld 🎁', 'x'.repeat(4000)]) {
       const plain = new TextEncoder().encode(text);
       expect(openBytes(sealBytes(plain, alice.publicKey), alice.publicKey, alice.secretKey)).toEqual(plain);
     }
@@ -139,16 +141,58 @@ describe('sealed boxes', () => {
     expect(() => openBytes(new Uint8Array(20_000), alice.publicKey, alice.secretKey)).toThrow(CryptoError);
   });
 
-  it('pads plaintext so ciphertext length reveals only a 256-byte bucket', () => {
+  it('pads every plaintext to one fixed size, so ciphertext length reveals nothing about the content', () => {
     const len = (n: number) => sealBytes(new Uint8Array(n).fill(65), alice.publicKey).length;
-    expect(len(1)).toBe(len(200));
-    expect(len(1)).toBe(256 + 48);
-    expect(len(255)).toBe(256 + 48);
-    expect(len(256)).toBe(512 + 48);
+    for (const n of [0, 1, 200, 255, 256, 257, 1_000, 2_048, 4_000, MAX_PLAINTEXT_BYTES]) expect(len(n)).toBe(SEALED_BYTES);
+    expect(SEALED_BYTES).toBe(4_096 + 48);
   });
 
-  it('refuses oversize plaintexts', () => {
+  it('refuses plaintexts that would not fit in the fixed size, instead of using a bigger bucket', () => {
+    expect(() => sealBytes(new Uint8Array(MAX_PLAINTEXT_BYTES + 1), alice.publicKey)).toThrowError(expect.objectContaining({ code: 'too_large' }));
     expect(() => sealBytes(new Uint8Array(9000), alice.publicKey)).toThrowError(expect.objectContaining({ code: 'too_large' }));
+  });
+
+  it('accepts only the one ciphertext length that is ever produced', () => {
+    const sealed = sealBytes(new TextEncoder().encode('x'), alice.publicKey);
+    expect(openBytes(sealed, alice.publicKey, alice.secretKey)).toBeTruthy();
+    expect(() => openBytes(sealed.slice(0, SEALED_BYTES - 1), alice.publicKey, alice.secretKey)).toThrow(CryptoError);
+    expect(() => openBytes(new Uint8Array(SEALED_BYTES + 256), alice.publicKey, alice.secretKey)).toThrow(CryptoError);
+    expect(() => openBytes(new Uint8Array(304), alice.publicKey, alice.secretKey)).toThrow(CryptoError); // the old 256-byte bucket
+  });
+
+  it('the worst-case profile and assignment the schemas allow both fit, and seal to the same length as an empty one', async () => {
+    const host = await generateKeyPair();
+    const groupId = 'a'.repeat(32);
+    const worstName = '😀'.repeat(32);
+    const worstWishlist = '😀'.repeat(280); // 4 bytes each: the largest UTF-8 the length limit allows
+    const asciiWishlist = '"'.repeat(280); // every character needs escaping in JSON: 2 bytes each
+    const worstAddress = 'u1' + 'q'.repeat(998);
+    const mk = async (i: number, name: string, wishlist: string, address: string) => ({ id: String(i).repeat(32), publicKey: encodeKey((await generateKeyPair()).publicKey), profile: { v: 1 as const, kind: 'profile' as const, groupId, pseudonym: name, wishlist, address } });
+    const members = [await mk(1, worstName, worstWishlist, worstAddress), await mk(2, 'Bo', '', 'u1' + 'q'.repeat(30)), await mk(3, 'Cy', asciiWishlist, worstAddress)];
+    const hostKey = encodeKey(host.publicKey);
+    const profileLengths = members.map((m) => sealProfile(m.profile, hostKey).length);
+    expect(new Set(profileLengths).size).toBe(1);
+    const assignments = { [members[0]!.id]: members[1]!.id, [members[1]!.id]: members[2]!.id, [members[2]!.id]: members[0]!.id };
+    const draw = buildDrawPayload({ groupId, drawVersion: 1, budgetCents: 25_000, members, assignments });
+    const bundleLengths = draw.bundles.map((b) => b.sealedBundle.length);
+    expect(new Set(bundleLengths).size).toBe(1);
+    expect(bundleLengths[0]).toBe(profileLengths[0]);
+  });
+
+  it('the metadata-only pairing attack from the 28 October audit finds no unique pairing when wishlists differ in length', async () => {
+    const host = await generateKeyPair();
+    const groupId = 'b'.repeat(32);
+    const hostKey = encodeKey(host.publicKey);
+    // Four people whose wishlists are 0, 90, 180 and 270 emoji long: the audit's setup, which used to give every pairing away.
+    const people = await Promise.all([0, 90, 180, 270].map(async (n, i) => ({ id: String(i + 1).repeat(32), publicKey: encodeKey((await generateKeyPair()).publicKey), profile: { v: 1 as const, kind: 'profile' as const, groupId, pseudonym: `Audit${i}`, wishlist: '🎁'.repeat(n), address: 'u1' + 'q'.repeat(140) } })));
+    const assignments = Object.fromEntries(people.map((m, i) => [m.id, people[(i + 1) % 4]!.id]));
+    const profileSizes = people.map((m) => base64urlnopad.decode(sealProfile(m.profile, hostKey)).length);
+    const draw = buildDrawPayload({ groupId, drawVersion: 1, budgetCents: 2500, members: people, assignments });
+    const bundleSizes = draw.bundles.map((b) => base64urlnopad.decode(b.sealedBundle).length);
+    // What an observer of stored lengths can do: a giver's bundle can go to any recipient whose profile has the same length.
+    const candidates = bundleSizes.map((bs, giver) => profileSizes.map((ps, r) => (r !== giver && ps === bs ? r : -1)).filter((r) => r >= 0));
+    for (const c of candidates) expect(c.length).toBe(3); // every other member is equally likely: nothing learned
+    expect(new Set([...profileSizes, ...bundleSizes]).size).toBe(1);
   });
 
   it('openPayload validates encoding, JSON and schema, never leaking raw errors', () => {
