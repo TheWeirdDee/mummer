@@ -21,7 +21,7 @@ Each row: what they can reach, attacks considered, boundaries that hold, mitigat
 
 ### 2. Application operator (Mummer's API and database)
 
-- **Can see:** group name, nicknames, budget, dates, counts, sealed blobs and their sizes (bucketed), token hashes, commitments, request metadata (IP, timing, paths).
+- **Can see:** group name, nicknames, budget, dates, counts, sealed blobs (all of one fixed length), token hashes, commitments, request metadata (IP, timing, paths).
 - **Attacks:** read the database; correlate sealed bundles with acknowledgments; infer pairings from row order or timestamps; learn addresses.
 - **Boundary:** no plaintext address, wishlist, memo, secret key, or pairing is ever received or stored.
 - **Mitigations:** client-side sealing; assignments keyed by giver and commitments keyed by recipient with no linking column; `WITHOUT ROWID` tables and id-sorted submission so storage order carries no cycle information; day-bucketed timestamps; group-level audit events only; progress is aggregate-only so counts cannot be differenced to a person; bundle fetches are never logged.
