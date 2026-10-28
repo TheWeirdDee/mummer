@@ -18,6 +18,8 @@ On this repository's machine (everything in it is fake data):
 DEMO=1 LIVE_URL=https://mummer-staging.mummer-app.workers.dev npx playwright test -c playwright.live.config.ts -g demo
 ```
 
+(The demo-video run, `docs/DEMO_VIDEO.md`, also leaves a ready-made `zodl-scan-qr.png` and `zodl-scan-details.txt` in `tests/e2e/.artifacts/demo/`: scan the PNG and compare with the details file.)
+
 It writes a private link for a staging exchange to `tests/e2e/.artifacts/demo-link.txt` (a throwaway exchange with public test-vector addresses; staging uses Cloudflare's public test keys). Open that link in a browser on the computer. The "You're giving to" page shows a QR, an address, an amount in ZEC and a memo that starts `MUMMER MUM-`.
 
 ## Steps and what to record
