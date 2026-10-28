@@ -82,6 +82,11 @@ export function Payment({
     if (bundle.budgetCents !== groupBudgetCents) return 'The amount in your assignment doesn’t match the budget the group agreed.';
     return undefined;
   }, [roster, bundle, gid, groupBudgetCents]);
+  // Someone who left or was removed is an ordinary, supported event; only the other mismatches can mean an altered assignment.
+  const membershipOnly = useMemo(() => {
+    const entry = roster.find((r) => r.id === bundle.recipient.memberId);
+    return !entry || entry.status === 'revoked';
+  }, [roster, bundle]);
   const expired = price ? now.getTime() >= Date.parse(price.validUntil) : false;
   const secondsLeft = price ? Math.max(0, Math.round((Date.parse(price.validUntil) - now.getTime()) / 1000)) : 0;
 
@@ -132,7 +137,7 @@ export function Payment({
   if (integrity) {
     return (
       <Notice tone="danger" title="Don’t send anything yet" live="assertive">
-        <p>{integrity} That shouldn’t happen. It can mean the assignment was altered. Tell the group (and the host) before anyone sends, so it can be sorted out.</p>
+        <p>{integrity} {membershipOnly ? 'Tell the host before anyone sends, so it can be sorted out.' : 'That shouldn’t happen. It can mean the assignment was altered. Tell the group (and the host) before anyone sends, so it can be sorted out.'}</p>
       </Notice>
     );
   }
