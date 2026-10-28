@@ -1,0 +1,14 @@
+[package]
+name = "test-address"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Makes one fresh Zcash mainnet unified address (Orchard and Sapling receivers only) for registration testing. The seed lives in memory only and is never printed or stored, so nobody can spend from the address. Not part of the shipped app."
+
+[dependencies]
+zcash_keys = { version = "0.17", features = ["orchard", "sapling"] }
+zcash_protocol = "0.11"
+zip32 = "0.3"
+rand = "0.8"
+
+[workspace]
