@@ -84,6 +84,17 @@ Three automated reviews during development and a source review on 27 October (`d
 
 See `docs/TESTING.md`. A fake clock and fixed price exist only in the API tests and the E2E-only Worker entry; the Turnstile verifier is a stub in API tests; addresses are public Zcash test vectors with no keys. Prices in screenshots read "e2e-fixture" for that reason.
 
+## 28 October 2026: production, address, logging and demo evidence
+
+| Check | Result |
+|---|---|
+| Real Turnstile on production, create page | A person completed the real challenge in their own browser and created an exchange. A read-only count of the production database afterwards showed **2 exchanges and 0 members** (no row contents read). Joining with the real challenge: **not yet recorded** |
+| Automated Chrome on production's real challenge | Refused: the widget showed "Verification failed" before anyone could act, so nothing was created. This is the bot protection working; it was not worked around |
+| Fresh mainnet shielded address | Made by `tools/test-address` with the maintained `zcash_keys` 0.17 crate from a throwaway seed held only in memory (never printed, logged or stored). Mummer's decoder reports a unified address with Orchard and Sapling receivers and no transparent receiver, and its address policy accepts it. Never funded |
+| Production logging | The Workers settings API shows no log push, no tail consumers and no observability block on `mummer` and `mummer-check`; `wrangler.toml` sets `[observability] enabled = false`. The telemetry API is not readable with the available token, and the dashboard toggle has not been looked at |
+| Demo video | 3:27, recorded from the real app on staging with burned-in captions and a SAPI voiceover (`docs/DEMO_VIDEO.md`). The first two recording attempts failed (a missing save-link step for a new device; a too-short wait) and were fixed; the third passed |
+| Zodl scan material | A QR and its expected address, amount and memo were produced from a staging exchange (`docs/ZODL_MANUAL_TEST.md`). Not scanned: no phone available |
+
 ## Not run (and why)
 
 | Item | Reason |
