@@ -1,6 +1,6 @@
 # Demo, judge walkthrough and submission materials
 
-**Nothing here has been published, posted or submitted.** There is no demo footage yet, no live deployment, and no real-wallet recording. This document is a production plan using only real captures, plus text that can be used as-is once the evidence exists.
+**Nothing here has been published, posted or submitted.** A demo video has been recorded from the real app on the staging deployment (see [`DEMO_VIDEO.md`](DEMO_VIDEO.md) for how it was made, what it shows and what it does not). There is no real-wallet recording and no recording of the production site. The plan below is the original production plan; where the recorded video differs from it, `DEMO_VIDEO.md` is the accurate description.
 
 ## Honest status the demo must respect
 
