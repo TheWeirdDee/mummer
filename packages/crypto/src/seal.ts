@@ -14,13 +14,20 @@ import { sodium } from './sodium.js';
  * inside the plaintext (kind, group id, draw version, member id), which every
  * opener checks. See docs/CRYPTOGRAPHIC_DESIGN.md.
  *
- * Plaintexts are padded (ISO/IEC 7816-4 via sodium.pad) to a block size so
- * the stored blob length reveals less about the profile or address.
+ * Every plaintext is padded to ONE fixed size (ISO/IEC 7816-4 via sodium.pad), so every sealed profile and every sealed assignment
+ * bundle has exactly the same length no matter what it contains. Padding to a coarse bucket (256 bytes, as before) is not enough: a
+ * bundle carries the recipient's nickname, wishlist and address, so its length tracks the recipient's profile length, and anyone who
+ * sees stored lengths (the database, the operator) can match givers to recipients. The fixed size is larger than the worst-case
+ * payload the schemas allow (see crypto.test.ts), and anything bigger is rejected rather than falling into a larger bucket.
  */
 
 export const SEAL_OVERHEAD_BYTES = 48; // crypto_box_SEALBYTES
-export const PAD_BLOCK = 256;
-const MAX_PLAINTEXT_BYTES = 8_192;
+/** Every sealed payload's plaintext is padded to exactly this many bytes. */
+export const PAD_BLOCK = 4_096;
+/** One byte of the block is the 0x80 padding marker, so the payload itself must be shorter than the block. */
+export const MAX_PLAINTEXT_BYTES = PAD_BLOCK - 1;
+/** The only ciphertext length that is ever produced or accepted. */
+export const SEALED_BYTES = PAD_BLOCK + SEAL_OVERHEAD_BYTES;
 
 export function sealBytes(plaintext: Uint8Array, recipientPublicKey: Uint8Array): Uint8Array {
   if (plaintext.length > MAX_PLAINTEXT_BYTES) throw new CryptoError('too_large');
@@ -29,9 +36,7 @@ export function sealBytes(plaintext: Uint8Array, recipientPublicKey: Uint8Array)
 }
 
 export function openBytes(sealed: Uint8Array, publicKey: Uint8Array, secretKey: Uint8Array): Uint8Array {
-  if (sealed.length < SEAL_OVERHEAD_BYTES + PAD_BLOCK || sealed.length > MAX_PLAINTEXT_BYTES + SEAL_OVERHEAD_BYTES + PAD_BLOCK) {
-    throw new CryptoError('malformed_payload');
-  }
+  if (sealed.length !== SEALED_BYTES) throw new CryptoError('malformed_payload');
   let padded: Uint8Array;
   try {
     padded = sodium().crypto_box_seal_open(sealed, publicKey, secretKey);
@@ -59,7 +64,7 @@ export function sealPayload(payload: unknown, recipientPublicKeyB64: string): st
  * rejected too.
  */
 export function openPayload<T>(sealedB64: string, publicKey: Uint8Array, secretKey: Uint8Array, schema: ZodType<T>): T {
-  if (typeof sealedB64 !== 'string' || !/^[A-Za-z0-9_-]+$/.test(sealedB64) || sealedB64.length > 16_384) throw new CryptoError('bad_encoding');
+  if (typeof sealedB64 !== 'string' || !/^[A-Za-z0-9_-]+$/.test(sealedB64) || sealedB64.length > 8_192) throw new CryptoError('bad_encoding');
   let sealed: Uint8Array;
   try {
     sealed = base64urlnopad.decode(sealedB64);
