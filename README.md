@@ -36,7 +36,7 @@ On most blockchains every payment is public, which defeats the point of a secret
 
 Read [`docs/PRIVACY.md`](docs/PRIVACY.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) and the in-app "Who can see what" page. In short:
 
-- **Mummer's server and database cannot read addresses, wishlists or pairings.** This is checked by tests that scan every request and stored value.
+- **Mummer's server and database cannot read addresses, wishlists or pairings from the draw.** This is checked by tests that scan every request and stored value. The one exception is a reveal that a giver chooses to make, which stores that single pair.
 - **The host's browser runs the draw and could see who draws whom.** This is a *trusted-host* design; a host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
 - **A malicious operator who serves altered JavaScript could read secrets or swap addresses.** The host-key fingerprint in the invite detects a swapped host key, and each address commitment lets the host and giver notice a profile changed in isolation, but the commitment is a public hash with no member signature behind it: someone who can write to the database can replace a profile and its commitment together without detection. Neither protects against altered JavaScript.
 - Hosting and network providers see connections. Small groups leak by deduction (use 5 or more).
@@ -73,7 +73,7 @@ Full instructions (local Worker, database migrations, environment): [`docs/SETUP
 
 ```bash
 npm run typecheck
-npm test               # 409 Vitest tests: unit, API on a real D1 (Miniflare), race tests, security
+npm test               # 416 Vitest tests: unit, API on a real D1 (Miniflare), race tests, security
 npm run build
 npx playwright test    # 76 browser tests in Chromium; starts its own servers on :8788 (app) and :8789 (human-check host)
 E2E_ALL_BROWSERS=1 npx playwright test --project=firefox   # or webkit (npx playwright install firefox webkit first)
