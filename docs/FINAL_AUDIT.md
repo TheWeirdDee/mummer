@@ -20,7 +20,7 @@ State of Mummer after its first real deployment, in five buckets: implemented, t
 | Layer | Result |
 |---|---|
 | `npm run typecheck` | Clean |
-| Vitest (unit, API on a real D1, race tests, security, human-check host) | **409 passed, 21 files** |
+| Vitest (unit, API on a real D1, race tests, security, human-check host) | **416 passed, 22 files** |
 | Playwright, Chromium | **76 passed in one command** |
 | Playwright, Firefox and WebKit | Run spec by spec: all passed except the six-participant journey in WebKit (unresolved) |
 | axe-core | No violations on every route and key state at 390 and 1280 px in all three browsers, and on nine live pages on both deployments |
