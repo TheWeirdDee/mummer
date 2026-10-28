@@ -232,7 +232,8 @@ groups.delete('/:gid/members/:mid', async (c) => {
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{16,64}$/;
 /** 50 sealed bundles with long non-ASCII wishlists exceed the default cap, so the draw has its own. */
-const DRAW_BODY_BYTES = 256 * 1024;
+/** Room for the largest allowed draw: one fixed-size sealed bundle (plus ids, commitments and JSON) for each of the most members a group may have. */
+const DRAW_BODY_BYTES = LIMITS.memberCapMax * (LIMITS.sealedChars + 256) + 8 * 1024;
 
 groups.post('/:gid/draw', async (c) => {
   const { env } = c;
