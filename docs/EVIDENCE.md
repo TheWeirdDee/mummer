@@ -93,6 +93,7 @@ See `docs/TESTING.md`. A fake clock and fixed price exist only in the API tests 
 | Fresh mainnet shielded address | Made by `tools/test-address` with the maintained `zcash_keys` 0.17 crate from a throwaway seed held only in memory (never printed, logged or stored). Mummer's decoder reports a unified address with Orchard and Sapling receivers and no transparent receiver, and its address policy accepts it. Never funded |
 | Production logging | The Workers settings API shows no log push, no tail consumers and no observability block on `mummer` and `mummer-check`; `wrangler.toml` sets `[observability] enabled = false`. The telemetry API is not readable with the available token, and the dashboard toggle has not been looked at |
 | Demo video | 3:27, recorded from the real app on staging with burned-in captions and a SAPI voiceover (`docs/DEMO_VIDEO.md`). The first two recording attempts failed (a missing save-link step for a new device; a too-short wait) and were fixed; the third passed |
+| Production recheck | 28 October 2026, 19:57 UTC: the read-only live suite passed (3 tests: headers, and accessibility and layout of the public pages at 390 and 1280 px); `/api/health` reports `production` and commit `4ab9a65`; `/api/config` reports `humanCheckRequired: true` with the check host `mummer-check` |
 | Zodl scan material | A QR and its expected address, amount and memo were produced from a staging exchange (`docs/ZODL_MANUAL_TEST.md`). Not scanned: no phone available |
 
 ## Not run (and why)
