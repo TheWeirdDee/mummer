@@ -15,7 +15,7 @@ On most blockchains every payment is public, which defeats the point of a secret
 ## How it works
 
 1. **Start an exchange.** Name it, set a budget and two dates, share one invite link.
-2. **Everyone joins.** Each person picks a nickname, an optional wishlist and a fresh shielded receiving address from their own wallet. These are sealed in the browser to the host's key before anything is sent.
+2. **Everyone joins.** Each person picks a nickname, an optional wishlist and a fresh shielded receiving address from their own wallet. The wishlist and address are sealed in the browser to the host's key before anything is sent; the nickname is not sealed, because the whole group and Mummer's server can see it.
 3. **The host draws.** The host's browser draws the names (a single cycle, so nobody draws themselves) and seals each person's assignment so only that person can open it.
 4. **Send your gift.** Mummer builds a ZIP 321 payment request (QR plus copyable address, amount and memo). The person's own wallet shows it and the person approves and sends. Mummer never touches funds.
 5. **Confirm and reveal.** Recipients say what arrived. On reveal day, givers may choose to unmask. Everything is optional and self-reported.
