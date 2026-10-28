@@ -31,7 +31,8 @@ test('privacy scan of a deployed instance: what the server and the network actua
   const addresses = shieldedAddresses(4);
   // Nicknames are group-visible by design, so they are not scanned for.
   const nicknames = ['Zephyrine', 'Quillon', 'Marigold', 'Thaddeus'];
-  const wishlists = nicknames.map((n, i) => `WISHTEXT-${n}-kq77${i}`);
+  // Wishlists of very different lengths: this is the setup the 28 October audit used to recover every pairing from stored lengths.
+  const wishlists = nicknames.map((n, i) => `WISHTEXT-${n}-kq77${i}${' gift'.repeat(i * 15)}`);
   const log: Exchange[] = [];
   const pending: Promise<void>[] = [];
 
@@ -125,6 +126,23 @@ test('privacy scan of a deployed instance: what the server and the network actua
     if (e.reqHeaders['referer']) failures.push(`${e.method} ${new URL(e.url).pathname}: sends a Referer`);
   }
   expect(failures, failures.join('\n')).toEqual([]);
+
+  // 1b. Every sealed blob that crossed the wire (profiles in join requests, bundles in the draw request and in assignment responses) has
+  // exactly the same length even though the wishlists above differ a lot, so stored lengths cannot be used to match givers to recipients.
+  expect(new Set(wishlists.map((w) => w.length)).size).toBe(4);
+  const sealedLengths = new Set<number>();
+  let sealedSeen = 0;
+  for (const e of own.filter((x) => new URL(x.url).pathname.startsWith('/api/'))) {
+    for (const t of [e.postData, e.body]) {
+      for (const m of t.match(/[A-Za-z0-9_-]{1000,}/g) ?? []) {
+        sealedLengths.add(m.length);
+        sealedSeen++;
+      }
+    }
+  }
+  console.log('SEALED BLOBS SEEN:', sealedSeen, 'DISTINCT LENGTHS:', JSON.stringify([...sealedLengths]));
+  expect(sealedSeen).toBeGreaterThan(8);
+  expect([...sealedLengths]).toHaveLength(1);
 
   // 2. No other origin than the app and the human-check host was contacted by the pages themselves.
   const foreign = [...new Set(log.map((e) => new URL(e.url).origin))].filter((o) => o !== origin);
