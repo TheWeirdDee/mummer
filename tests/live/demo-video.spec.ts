@@ -311,14 +311,25 @@ test('demo video of the real app on staging (DEMO_VIDEO=1 only)', async ({ brows
       },
     },
     {
-      text: 'The host sees counts only. And a glass box shows exactly what the server stores: sealed values, sizes and fingerprints, never addresses or wishlists.',
+      text: 'The host sees counts only. And a glass box shows exactly what the server stores: sealed values, every one exactly the same size, and fingerprints. Never addresses or wishlists.',
       run: async () => {
-        await caption('The host sees counts, and a glass box of what the server stores: sealed blobs only');
+        await caption('Glass box: the server stores sealed blobs, all exactly the same size, so length reveals nothing');
         await openAs(adminLink);
         await page.getByText('What Mummer’s server stores for this exchange').click();
         await page.getByRole('button', { name: /Show what.s stored/ }).click();
         await expect(page.getByLabel('Redacted database contents')).toContainText('"sealed": true');
-        await page.getByLabel('Redacted database contents').scrollIntoViewIfNeeded();
+        const box = page.getByLabel('Redacted database contents');
+        await box.scrollIntoViewIfNeeded();
+        // Show the sealed rows themselves: every one reports the same byte count.
+        await box.evaluate((el) => {
+          const text = (el as HTMLTextAreaElement).value ?? el.textContent ?? '';
+          const at = text.indexOf('"bytes"');
+          el.scrollTop = at < 0 ? 0 : Math.max(0, (el.scrollHeight * at) / text.length - 120);
+        });
+        await sleep(2500);
+        await box.evaluate((el) => {
+          el.scrollTop += 220;
+        });
       },
     },
     {
