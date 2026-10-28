@@ -49,7 +49,8 @@ Details: `docs/ARCHITECTURE.md`, `docs/CRYPTOGRAPHIC_DESIGN.md`, `docs/PRIVACY_A
 - Reveals are consent-gated; public statistics are thresholded.
 
 **Not protected (stated in the app and in the repository):**
-- ****An earlier version leaked pairings through stored sealed-blob lengths; that is fixed (see above), but the fix is days old and has had no independent review.** The draw is trusted-host.** The host's browser opens everyone's details to run the draw and could see who draws whom. A host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
+- **An earlier version leaked pairings through stored sealed-blob lengths. That is fixed and re-verified by the independent auditor for fresh exchanges, but the fix is only hours old.** The server now also refuses old-size blobs, so a stale page cannot store them; exchanges created before the fix cannot be completed and must be recreated.
+- **The draw is trusted-host.** The host's browser opens everyone's details to run the draw and could see who draws whom. A host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
 - A malicious operator who serves altered JavaScript could read secrets or swap addresses. The host-key fingerprint in the invite detects a swapped host key, and each address commitment lets the host and giver notice a profile changed in isolation, but the commitment is a public hash with no member signature behind it: someone who can write to the database can replace a profile and its commitment together without detection. Neither protects against altered JavaScript.
 - Hosting and network providers see connections. In groups under five people, deduction leaks.
 - "Sent" and "received" are self-reports; no independent proof of payment.
@@ -72,7 +73,7 @@ Run history and the runs that were not clean: `docs/EVIDENCE.md`. Summary:
 | Check | Result |
 |---|---|
 | Type check | Clean |
-| Unit, API (real D1), race and security tests | 409 passed (21 files) |
+| Unit, API (real D1), race and security tests | 416 passed (22 files) |
 | Browser tests, Chromium | 76 passed in one command |
 | Firefox and WebKit | Browser-security specs pass; the six-person journey fails in WebKit on this machine (unresolved, see below) |
 | Accessibility (axe-core) | No violations on every route and key state, 390 and 1280 px, three browsers, and on nine live pages of both deployments |
