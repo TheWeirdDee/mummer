@@ -2,7 +2,7 @@
 
 **A privacy-focused, noncustodial Secret Santa where the gifts are small shielded Zcash payments sent from people's own wallets.**
 
-> **Status: deployed on Cloudflare's free tier**, at https://mummer.mummer-app.workers.dev. Everything works on a real deployment **except one thing nobody has done yet**: creating or joining an exchange on production needs a person to pass Cloudflare's real Turnstile challenge, which automation cannot. The full journey (create, join, draw, pay request, confirm, recover, delete) was verified in a real browser on a staging copy that uses Cloudflare's public test keys. **No real wallet or payment has been tested** (not Zodl, not testnet). See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for exactly what is and is not verified.
+> **Status: deployed on Cloudflare's free tier**, at https://mummer.mummer-app.workers.dev. A person has completed the real Turnstile challenge on production and created an exchange (the production database held 2 exchanges and 0 members at the last count, 28 October 2026); **joining an exchange on production with the real challenge has not been recorded yet**. The full journey (create, join, draw, pay request, confirm, recover, delete) was verified in a real browser on a staging copy that uses Cloudflare's public test keys. **No real wallet or payment has been tested** (not Zodl, not testnet). See [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) for exactly what is and is not verified, and [`docs/SUBMISSION.md`](docs/SUBMISSION.md) for the ZECATHON submission text.
 
 ![Landing page, desktop](docs/screenshots/landing-desktop.png)
 
@@ -90,7 +90,7 @@ To check Zodl yourself in 10 to 15 minutes without spending anything, follow [`d
 
 ## Demo and evidence
 
-[`docs/DEMO.md`](docs/DEMO.md) is a plan for a recorded demo using only test addresses and no real keys. [`docs/EVIDENCE.md`](docs/EVIDENCE.md) lists every check and its result.
+[`docs/DEMO_VIDEO.md`](docs/DEMO_VIDEO.md) describes the recorded demo (the real app on staging, test addresses, no payment) and how to regenerate it; [`docs/DEMO.md`](docs/DEMO.md) is the original plan; [`docs/SUBMISSION.md`](docs/SUBMISSION.md) is the ZECATHON submission text. [`docs/EVIDENCE.md`](docs/EVIDENCE.md) lists every check and its result.
 
 ## Documentation
 
@@ -103,7 +103,7 @@ To check Zodl yourself in 10 to 15 minutes without spending anything, follow [`d
 
 ## Limitations
 
-Trusted-host draw; no independent payment proof; no company-funded mode; no real-wallet testing; not deployed; no third-party security review; no manual screen-reader pass. The full list is [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+Trusted-host draw; no independent payment proof; no company-funded mode; no real-wallet testing (Zodl unverified, no testnet or mainnet payment executed); no third-party security review; no manual screen-reader pass. The full list is [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
 
 ## License
 
