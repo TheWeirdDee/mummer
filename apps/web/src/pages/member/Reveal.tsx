@@ -138,8 +138,8 @@ export function Reveal({
       </section>
 
       {bundle && (
-        <section aria-labelledby="reveal-title">
-          <h3 id="reveal-title" style={{ fontSize: 'var(--fs-3)' }}>Reveal who you gave to</h3>
+        <section aria-labelledby="reveal-action-title">
+          <h3 id="reveal-action-title" style={{ fontSize: 'var(--fs-3)' }}>Reveal who you gave to</h3>
           {mine ? (
             <Notice tone="success" title="You revealed">
               <p>
