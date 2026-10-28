@@ -40,3 +40,17 @@ A time-boxed check of the deployed product before submission, aimed at unintende
 - Nothing about real wallets was tested: whether a wallet shows the memo, whether the QR scans, or how a real shielded payment behaves.
 - It does not cover what hosting and network providers observe (connection metadata) and cannot reduce it.
 - Small groups leak by deduction regardless of the code (use 5 or more).
+
+## Re-audit disposition (independent re-audit, 28 October 2026, late evening)
+
+The independent auditor re-checked the fix and gave a **conditional go**: the original length leak is fixed for fresh current-client exchanges (all ciphertexts 4,144 bytes, confirmed live; 50 live authorization checks matched). It named two release conditions and some documentation issues:
+
+| Finding | Disposition |
+|---|---|
+| R1 (high): the API still accepted old-size blobs from pre-fix clients, which would keep the old leak and could not be opened by the new client | **Fixed and deployed** (commit `84da964`, decision D-41): the server accepts only the one sealed length and answers 422 "out of date, reload". Verified on staging and production with a legacy-size join. Legacy exchanges must be deleted and recreated; this cannot make an old exposure secret again |
+| R2 (medium): fixed-size blobs made draws of 46 to 50 people exceed the 256 KiB limit (HTTP 413) | **Fixed and deployed**: the limit is derived from the largest allowed group. A real 50-person draw is now a regression test |
+| Residual database-substitution wording in `KNOWN_LIMITATIONS.md` | Corrected |
+| "Days old" wording, malformed bold, stale 409 and 3:27 figures in the submission and evidence docs | Corrected (416 tests; 1:50 video) |
+| Not tested by anyone: wallet acceptance, production CAPTCHA by an auditor, six viewports, full accessibility pass, the actual video | Unchanged; stated as unverified |
+
+The separate source review of the same day (`docs/BUILD_REVIEW_2026-10-28.md`) added items now fixed (privacy-page retention and absolutes, false tampering warning for a removed recipient, duplicate heading id) and items still open (see `docs/KNOWN_LIMITATIONS.md`).
