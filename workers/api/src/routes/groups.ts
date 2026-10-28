@@ -424,7 +424,7 @@ groups.get('/:gid/glassbox', async (c) => {
   const { env } = c;
   const g = await authAdmin(env, c.get('deps'), pathId(c, 'gid'), bearerToken(c));
   const digest = (s: string) => base16.encode(sha256(new TextEncoder().encode(s))).slice(0, 8);
-  const blob = (s: string) => ({ sealed: true as const, bytes: s.length, fingerprint: digest(s) });
+  const blob = (s: string) => ({ sealed: true as const, bytes: Math.floor((s.length * 3) / 4), fingerprint: digest(s) });
   const [members, assignments, commitments, reveals, privateReveals, events, acks, sent] = await Promise.all([
     env.DB.prepare('SELECT * FROM members WHERE group_id = ?1 ORDER BY id').bind(g.id).all<MemberRow>(),
     env.DB.prepare('SELECT giver_member_id, draw_version, sealed_bundle FROM assignments WHERE group_id = ?1').bind(g.id).all<{ giver_member_id: string; draw_version: number; sealed_bundle: string }>(),
