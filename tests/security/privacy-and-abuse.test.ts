@@ -119,7 +119,7 @@ describe('assertion 3: a database dump alone reveals neither assignments nor sec
     expect(commitmentRows.map((r) => r.recipient_member_id).sort()).toEqual(s.members.map((m) => m.id).sort());
   });
 
-  it('sealed profile length reveals only a coarse bucket, not wishlist length', async () => {
+  it('every sealed profile has exactly the same length, so lengths reveal nothing about the wishlist', async () => {
     const c = w.client();
     const host = await createGroup(c);
     const { joinMember } = await import('../../workers/api/test/harness.js');
