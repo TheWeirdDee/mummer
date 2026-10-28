@@ -215,7 +215,7 @@ test('demo video of the real app on staging (DEMO_VIDEO=1 only)', async ({ brows
       },
     },
     {
-      text: 'A real shielded unified address is accepted. Everything entered is sealed in the browser before it is sent.',
+      text: 'A real shielded unified address is accepted. The address and wishlist are sealed in the browser before they are sent. Only the nickname is visible to the group.',
       run: async () => {
         await caption('A valid shielded address is accepted (demo address, not a real wallet)');
         await page.getByLabel('Your shielded receiving address').fill(addresses[0]!);
