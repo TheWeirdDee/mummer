@@ -12,7 +12,7 @@ Mummer composes established primitives. It defines **no** new primitive and no n
 | Token and commitment hashing | SHA-256 | `@noble/hashes` (cross-checked with `node:crypto`) |
 | Randomness | `crypto.getRandomValues` (platform CSPRNG), libsodium's `crypto_box_keypair` | Web Crypto, libsodium |
 | Draw | Sattolo's algorithm over unbiased rejection-sampled integers | `packages/draw` |
-| Padding | ISO/IEC 7816-4 padding (`sodium.pad`) to 256-byte blocks | libsodium |
+| Padding | ISO/IEC 7816-4 padding (`sodium.pad`) to ONE fixed size, 4096 bytes, for every sealed payload | libsodium |
 
 ## Keys and secrets
 
@@ -28,7 +28,7 @@ The **authorization token and the encryption key are distinct** values, carried 
 
 ## Message formats
 
-All sealed payloads are JSON, validated by Zod schemas (`packages/shared/src/schemas.ts`), padded to a 256-byte block, then `crypto_box_seal`ed to the recipient's public key and encoded as unpadded base64url.
+All sealed payloads are JSON, validated by Zod schemas (`packages/shared/src/schemas.ts`), padded to exactly 4096 bytes, then `crypto_box_seal`ed to the recipient's public key and encoded as unpadded base64url.
 
 **Profile** (member to host): `{v:1, kind:"profile", groupId, pseudonym, wishlist, address}`
 
@@ -52,7 +52,7 @@ This is tested (`packages/crypto/test/crypto.test.ts`: cross-group, cross-member
 
 ### Padding
 
-Stored blob length is bucketed to 256-byte multiples (+48 bytes sealed-box overhead), so a database holder cannot read wishlist or address length precisely. Tested: profiles with different wishlist lengths store with identical length.
+Every sealed profile and every sealed assignment bundle has **exactly the same stored length** (4096 + 48 bytes of sealed-box overhead), whatever it contains, so a database holder learns nothing about wishlist or address length and cannot match a giver's bundle to a recipient's profile by size. Payloads larger than the block are refused, never placed in a bigger bucket. **This replaced 256-byte buckets on 28 October 2026**: an independent audit showed that a bundle carries the recipient's nickname, wishlist and address, so with bucketed sizes its length tracked the recipient's profile length and gave every pairing away when wishlists differed in length (decision D-40). Tested: the worst-case payloads the schemas allow fit and seal to the same length as an empty one; the audit's metadata-only attack finds no unique pairing; the live scan finds one single sealed length on the wire.
 
 ## Commitments and the gift reference
 
