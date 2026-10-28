@@ -38,7 +38,7 @@ Read [`docs/PRIVACY.md`](docs/PRIVACY.md), [`docs/THREAT_MODEL.md`](docs/THREAT_
 
 - **Mummer's server and database cannot read addresses, wishlists or pairings.** This is checked by tests that scan every request and stored value.
 - **The host's browser runs the draw and could see who draws whom.** This is a *trusted-host* design; a host-blind draw was not built. The app offers "I'm only organizing" so the host need not play.
-- **A malicious operator who serves altered JavaScript could read secrets or swap addresses.** Address commitments and a host-key fingerprint in the invite detect database-only swaps, not this.
+- **A malicious operator who serves altered JavaScript could read secrets or swap addresses.** The host-key fingerprint in the invite detects a swapped host key, and each address commitment lets the host and giver notice a profile changed in isolation, but the commitment is a public hash with no member signature behind it: someone who can write to the database can replace a profile and its commitment together without detection. Neither protects against altered JavaScript.
 - Hosting and network providers see connections. Small groups leak by deduction (use 5 or more).
 - "Sent" and "received" are self-reports. Mummer cannot see a shielded payment and never labels anything "verified".
 
@@ -54,7 +54,7 @@ npm workspaces monorepo: TypeScript 5.9, React 19 + Vite + React Router, a Cloud
 | ZIP 321 payment requests | **Verified** against the specification examples; round trips and tamper detection |
 | Zodl wallet scanning a Mummer QR | **Not verified** (needs devices and funds). The app never claims a scan prefilled anything and always offers copy buttons |
 | Real shielded payment end to end | **Not done.** No testnet transaction either (tooling build blocked, see `docs/INTEGRATION_RESEARCH.md`) |
-| Cloudflare Turnstile | **Partly verified.** Runs in a frame on a separate origin; verified with Cloudflare's test keys end to end on staging and with an always-pass control on production. The real managed challenge has not been completed by a person |
+| Cloudflare Turnstile | **Partly verified.** Runs in a frame on a separate origin; verified with Cloudflare's test keys end to end on staging and with an always-pass control on production; a person has completed the real managed challenge on production's create page. Joining with the real challenge on production has not been recorded |
 
 Details: [`docs/INTEGRATION_RESEARCH.md`](docs/INTEGRATION_RESEARCH.md).
 
