@@ -1,6 +1,6 @@
 # Demo video
 
-A 1 minute 47 second video (cut from a 3 minute 27 second full recording to meet a two-minute limit) of the real app, recorded in a real Chromium window with captions drawn into the page and a voiceover from Windows' built-in speech engine (SAPI, voice "Microsoft David"). Nothing is simulated or composited: every screen is the app responding to real clicks.
+A 1 minute 50 second video (cut from a 3 minute 27 second full recording to meet a two-minute limit) of the real app, recorded in a real Chromium window with captions drawn into the page and a voiceover from Windows' built-in speech engine (SAPI, voice "Microsoft David"). Nothing is simulated or composited: every screen is the app responding to real clicks.
 
 ## What it shows, and on what
 
@@ -17,7 +17,7 @@ It runs against the **staging** deployment (https://mummer-staging.mummer-app.wo
 | Assignment | Ada's recipient, wishlist, **QR**, address, amount and memo with copy buttons |
 | Sent | "I sent it" with the dialog that says it is only the giver's word |
 | Confirm | The recipient enters the memo reference; the dialog says it is their own word |
-| Glass box | What the server stores: sealed blobs, sizes and fingerprints |
+| Glass box | What the server stores: sealed blobs, **all exactly the same size** (4144 bytes), and fingerprints. The scene scrolls to a sealed row so the size is visible. Re-recorded after the 28 October fix for the sealed-length leak |
 | Delete | The host deletes the exchange; everything is removed |
 | End card | Live URL, repository, and what is **not** verified |
 
